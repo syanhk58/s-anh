@@ -6,3 +6,8 @@ node_modules/
 *.log
 config/script-generator.yaml
 config/bigquery-key.json
+
+.vercel
+
+# Spy runtime data (server-side only)
+spy-data/
