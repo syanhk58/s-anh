@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+.next/
+.vercel/
+.env.local
+*.log
+config/script-generator.yaml
+config/bigquery-key.json
