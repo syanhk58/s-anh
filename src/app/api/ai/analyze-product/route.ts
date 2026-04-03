@@ -28,7 +28,7 @@ QUY TẮC BẮT BUỘC VỀ GIÁ VÀ ĐỒNG TIỀN:
 - Combo 2 / Option 2: ${p2}
 - Mọi chỗ có giá phải ghi đúng ${cur}, ví dụ: "${p1}" không phải "$${priceCombo1 || '99'}"
 
-Dựa vào ảnh sản phẩm, viết đầy đủ 15 sections.
+Dựa vào ảnh sản phẩm, viết đầy đủ 11 sections.
 Mỗi section bắt đầu bằng ===SECTION_NAME===
 Mỗi bullet/emoji phải nằm trên 1 DÒNG RIÊNG, KHÔNG viết liền thành 1 đoạn. Viết text thuần với các section markers bên dưới.
 Mỗi section bắt đầu bằng ===TÊN_SECTION=== trên 1 dòng riêng.
@@ -71,9 +71,6 @@ ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiế
 ===PITCH_PH===
 ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Filipino. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Filipino cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
 
-===PITCH_ID===
-${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
-
 ===BOTCAKE_VI===
 ${sampleBotcake?.trim() ? `COPY Y HỆT format, labels, cấu trúc, giá, đồng tiền từ MẪU BOTCAKE bên dưới.
 CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch bản chatbot tiếng Việt:
@@ -90,9 +87,6 @@ CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch b
 
 ===BOTCAKE_EN===
 ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh của kịch bản chatbot, cùng format.`}
-
-===BOTCAKE_ID===
-${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) của kịch bản chatbot, cùng format.`}
 
 ===INGREDIENTS_VI===
 🧪 Thành phần:
@@ -128,16 +122,6 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 ✅ [Benepisyo 1]
 ✅ [Benepisyo 2]
 
-===INGREDIENTS_ID===
-🧪 Komposisi:
-
-🔹 [Bahan 1]
-🔹 [Bahan 2]
-
-👉 Manfaat utama:
-
-✅ [Manfaat 1]
-✅ [Manfaat 2]
 
 ===USAGE_VI===
 📋 Cách sử dụng:
@@ -166,14 +150,7 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 
 ⚠️ Paalala: [mahalagang paalala]
 
-===USAGE_ID===
-📋 Cara penggunaan:
-
-1️⃣ [Langkah 1]
-2️⃣ [Langkah 2]
-3️⃣ [Langkah 3]
-
-⚠️ Catatan: [catatan penting]`;
+`;
 
     if (samplePitch?.trim()) {
         prompt += `\n\n🚨🚨🚨 QUAN TRỌNG NHẤT — MẪU KỊCH BẢN CHÀO HÀNG 🚨🚨🚨
@@ -444,7 +421,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // ══════ STEP 2: Writer 70B ══════
+        // ══════ STEP 2a: Writer 70B — 11 sections (VI/EN/PH) ══════
         const writerResult = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             max_tokens: 8000,
@@ -453,13 +430,66 @@ export async function POST(req: NextRequest) {
                 { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2) },
                 {
                     role: "user",
-                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả 15 sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
+                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả 11 sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
                 },
             ],
         });
 
         const rawText = writerResult.choices[0]?.message?.content || "";
         const p = parseSections(rawText);
+
+        // ══════ STEP 2b: Dịch sang tiếng Indonesia (4 sections) ══════
+        const idSourceContent = `Dịch các nội dung sau sang tiếng Indonesia (Bahasa Indonesia).
+Giữ nguyên 100% cấu trúc, emoji, giá cả, đồng tiền. CHỈ dịch text.
+
+===NỘI DUNG CẦN DỊCH===
+
+--- PITCH (English) ---
+${p.pitchEn}
+
+--- BOTCAKE (English) ---
+${p.botcakeEn}
+
+--- INGREDIENTS (English) ---
+${p.ingredientsEn}
+
+--- USAGE (English) ---
+${p.usageEn}
+
+===YÊU CẦU OUTPUT===
+Trả về đúng 4 sections với markers:
+===PITCH_ID===
+[bản dịch pitch]
+===BOTCAKE_ID===
+[bản dịch botcake]
+===INGREDIENTS_ID===
+[bản dịch ingredients]
+===USAGE_ID===
+[bản dịch usage]`;
+
+        try {
+            const idResult = await groq.chat.completions.create({
+                model: "llama-3.3-70b-versatile",
+                max_tokens: 4000,
+                temperature: 0.5,
+                messages: [
+                    { role: "system", content: "Bạn là dịch giả chuyên nghiệp Anh → Indonesia. Dịch chính xác, giữ nguyên format, emoji, giá." },
+                    { role: "user", content: idSourceContent },
+                ],
+            });
+
+            const idRaw = idResult.choices[0]?.message?.content || "";
+            const idParsed = parseSections(idRaw);
+            // Merge Indonesian results into main object
+            p.pitchId = idParsed.pitchId || "";
+            p.botcakeId = idParsed.botcakeId || "";
+            p.ingredientsId = idParsed.ingredientsId || "";
+            p.usageId = idParsed.usageId || "";
+        } catch {
+            console.warn("[analyze-product] Indonesian translation failed, continuing without ID");
+
+            // Continue without Indonesian — not critical
+        }
 
         // ══════ Post-process: Wrap Botcake scripts into structured prompt ══════
         const botcakeViStructured = buildStructuredBotcake({
@@ -477,13 +507,12 @@ export async function POST(req: NextRequest) {
             lang: "en",
         });
         const botcakeIdStructured = buildStructuredBotcake({
-            chatbotScript: p.botcakeId,
+            chatbotScript: p.botcakeId || p.botcakeEn,
             productName: "produk",
-            ingredients: p.ingredientsId,
-            usage: p.usageId,
-            lang: "en",  // use english-style structured prompt for ID
+            ingredients: p.ingredientsId || p.ingredientsEn,
+            usage: p.usageId || p.usageEn,
+            lang: "en",
         });
-
 
         return NextResponse.json({
             pitchVi: p.pitchVi,
