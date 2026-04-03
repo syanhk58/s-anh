@@ -26,18 +26,11 @@ function getWriterPrompt(samplePitch?: string, sampleBotcake?: string, currency?
     const p1 = priceCombo1 ? `${priceCombo1} ${cur}` : `[GIÁ] ${cur}`;
     const p2 = priceCombo2 ? `${priceCombo2} ${cur}` : `[GIÁ] ${cur}`;
 
-    let prompt = `Bạn là copywriter chuyên viết kịch bản bán hàng đa ngôn ngữ.
-QUY TẮC BẮT BUỘC VỀ GIÁ VÀ ĐỒNG TIỀN:
-- ĐỒNG TIỀN BẮT BUỘC: ${cur} (KHÔNG dùng $, USD, hay đồng tiền khác)
-- Combo 1 / Option 1: ${p1}
-- Combo 2 / Option 2: ${p2}
-- Mọi chỗ có giá phải ghi đúng ${cur}, ví dụ: "${p1}" không phải "$${priceCombo1 || '99'}"
+    let prompt = `Bạn là copywriter bán hàng đa ngôn ngữ.
+GIÁ: ${cur} only. Combo 1: ${p1}, Combo 2: ${p2}. KHÔNG dùng $, USD.
 
-Dựa vào ảnh sản phẩm, viết đầy đủ ${sectionCount + 2} sections.
-Mỗi section bắt đầu bằng ===SECTION_NAME===
-Mỗi bullet/emoji phải nằm trên 1 DÒNG RIÊNG, KHÔNG viết liền thành 1 đoạn. Viết text thuần với các section markers bên dưới.
-Mỗi section bắt đầu bằng ===TÊN_SECTION=== trên 1 dòng riêng.
-Mỗi bullet/emoji phải nằm trên 1 DÒNG RIÊNG, KHÔNG viết liền thành 1 đoạn.
+Viết ${sectionCount + 2} sections. Mỗi section bắt đầu bằng ===SECTION_NAME===
+Mỗi bullet/emoji nằm trên 1 DÒNG RIÊNG.
 
 ===PITCH_VI===
 ${samplePitch?.trim() ? `COPY Y HỆT format, cấu trúc, emoji, giá, đồng tiền từ MẪU GỐC bên dưới.
@@ -179,27 +172,11 @@ ${hasId ? `===USAGE_ID===
 `;
 
     if (samplePitch?.trim()) {
-        prompt += `\n\n🚨🚨🚨 QUAN TRỌNG NHẤT — MẪU KỊCH BẢN CHÀO HÀNG 🚨🚨🚨
-ĐÂY LÀ FORMAT GỐC — BẮT BUỘC COPY Y HỆT:
-- PHẢI giữ NGUYÊN cấu trúc giá VÀ wording từ mẫu (ví dụ: "Buy 1, get 1 free = 950 TWD" KHÔNG được viết thành "Combo 1: 950 TWD")
-- PHẢI giữ NGUYÊN emoji, labels, thứ tự dòng
-- CHỈ thay: tên sản phẩm, lợi ích, thành phần
-- GIÁ VÀ ĐỒNG TIỀN đã đúng trong mẫu — KHÔNG thay đổi
-- Nếu mẫu viết "Buy 1, get 1 free = X" thì output PHẢI viết "Buy 1, get 1 free = X"
-- Nếu mẫu viết "Option 1: Buy 1 Get 1 = X" thì output PHẢI viết "Option 1: Buy 1 Get 1 = X"
-
-MẪU GỐC (COPY Y HỆT FORMAT NÀY):
+        prompt += `\n\n🚨 MẪU GỐC — COPY Y HỆT format, emoji, giá, đồng tiền. CHỈ thay tên SP và lợi ích.
 """${samplePitch}"""`;
     }
     if (sampleBotcake?.trim()) {
-        prompt += `\n\n🤖 MẪU BOTCAKE — BẮT BUỘC COPY Y HỆT:
-- PHẢI giữ NGUYÊN format, labels, cấu trúc, emoji, giá, đồng tiền
-- CHỈ thay nội dung sản phẩm (tên, thành phần, công dụng)
-- GIÁ VÀ ĐỒNG TIỀN đã đúng trong mẫu — KHÔNG thay đổi
-- KHÔNG thêm/bớt labels — giữ nguyên 100%
-- KHÔNG viết lại cấu trúc giá — COPY y hệt
-
-MẪU GỐC (COPY Y HỆT FORMAT NÀY):
+        prompt += `\n\n🤖 MẪU BOTCAKE — COPY Y HỆT format, labels, giá. CHỈ thay nội dung SP.
 """${sampleBotcake}"""`;
     }
 
