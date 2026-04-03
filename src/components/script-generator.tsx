@@ -397,18 +397,32 @@ export default function ScriptGeneratorTab() {
         setSampleBotcake(replacePrices(tmpl.botcake));
     };
 
-    // Shop list for Pancake push
-    const [shops, setShops] = useState<Array<{ name: string; shop_id: string }>>([]);
+    // Shop list for Pancake push (with pages)
+    interface PancakePage { id: string; name: string; platform: string; }
+    interface ShopWithPages { name: string; shop_id: string; pages: PancakePage[]; }
+    const [shops, setShops] = useState<ShopWithPages[]>([]);
     const [selectedShopId, setSelectedShopId] = useState<string>("");
+    const [selectedPageId, setSelectedPageId] = useState<string>("");
 
-    // Fetch shop list on mount
+    // Get pages for selected shop
+    const selectedShop = shops.find(s => s.shop_id === selectedShopId);
+    const pagesForShop = selectedShop?.pages || [];
+    const totalPages = shops.reduce((sum, s) => sum + (s.pages?.length || 0), 0);
+
+    // Fetch shop list (with pages) on mount
     useEffect(() => {
         fetch('/api/pancake/push-template')
             .then(res => res.json())
             .then(data => {
                 if (data.shops) {
                     setShops(data.shops);
-                    if (data.shops.length > 0) setSelectedShopId(data.shops[0].shop_id);
+                    if (data.shops.length > 0) {
+                        setSelectedShopId(data.shops[0].shop_id);
+                        // Auto-select first page of first shop
+                        if (data.shops[0].pages?.length > 0) {
+                            setSelectedPageId(data.shops[0].pages[0].id);
+                        }
+                    }
                 }
             })
             .catch(() => {});
@@ -548,6 +562,82 @@ export default function ScriptGeneratorTab() {
                 <p className="text-sm text-slate-400 mt-1">
                     Upload ảnh sản phẩm (nhiều góc) → AI phân tích → nhận kịch bản đa ngôn ngữ, thành phần, HDSD, Botcake.
                 </p>
+            </div>
+
+            {/* ═══ ROW 0: CHỌN SHOP + PAGE (giống Gửi tin hàng loạt) ═══ */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-sm shadow-sm p-5 mb-4">
+                <div className="flex items-center gap-2.5 mb-4">
+                    <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-md flex items-center justify-center">
+                        <Send className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-700 leading-none">Pancake Page</h3>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Chọn shop & page → kịch bản sẽ tự đẩy vào page này</p>
+                    </div>
+                    {totalPages > 0 && (
+                        <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 font-bold border border-orange-100">
+                            {totalPages} pages
+                        </span>
+                    )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Chọn Shop */}
+                    <div>
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+                            <span className="text-base">🏪</span> Chọn Shop
+                        </label>
+                        <select
+                            value={selectedShopId}
+                            onChange={(e) => {
+                                setSelectedShopId(e.target.value);
+                                const shop = shops.find(s => s.shop_id === e.target.value);
+                                if (shop?.pages?.length) {
+                                    setSelectedPageId(shop.pages[0].id);
+                                } else {
+                                    setSelectedPageId("");
+                                }
+                            }}
+                            className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-300 shadow-sm transition-all"
+                        >
+                            {shops.map((shop) => (
+                                <option key={shop.shop_id} value={shop.shop_id}>
+                                    {shop.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    {/* Chọn Page */}
+                    <div>
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
+                            <span className="text-base">📄</span> Chọn Page ({pagesForShop.length} pages)
+                        </label>
+                        <select
+                            value={selectedPageId}
+                            onChange={(e) => setSelectedPageId(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-300 shadow-sm transition-all"
+                        >
+                            {pagesForShop.length === 0 ? (
+                                <option value="">— Không có page —</option>
+                            ) : (
+                                pagesForShop.map((page) => (
+                                    <option key={page.id} value={page.id}>
+                                        {page.name} ({page.id})
+                                    </option>
+                                ))
+                            )}
+                        </select>
+                    </div>
+                </div>
+                {/* Selected page badge */}
+                {selectedPageId && selectedShop && (
+                    <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-100">
+                        <span className="text-xs">✅</span>
+                        <span className="text-[11px] text-slate-600 font-medium">
+                            Kịch bản sẽ đẩy vào: <strong className="text-orange-600">{pagesForShop.find(p => p.id === selectedPageId)?.name || selectedPageId}</strong>
+                            <span className="text-slate-400"> • Shop {selectedShop.name}</span>
+                        </span>
+                    </div>
+                )}
             </div>
 
             {/* ═══ ROW 1: ẢNH SẢN PHẨM (full width) ═══ */}
@@ -739,20 +829,16 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-red-500"
                         isLoading={isGenerating}
                     />
-                    {/* Nút đẩy Pancake + chọn shop */}
+                    {/* Nút đẩy Pancake (shop + page đã chọn ở trên) */}
                     {output && output.pitchVi && (
                         <div className="flex flex-col gap-2">
-                            <select
-                                value={selectedShopId}
-                                onChange={(e) => setSelectedShopId(e.target.value)}
-                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400/30"
-                            >
-                                {shops.map((shop) => (
-                                    <option key={shop.shop_id} value={shop.shop_id}>
-                                        {shop.name}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 border border-orange-100">
+                                <span className="text-xs">🏪</span>
+                                <span className="text-[11px] text-slate-600 font-medium truncate">
+                                    {selectedShop?.name || '—'}
+                                    {selectedPageId && <span className="text-slate-400"> → {pagesForShop.find(p => p.id === selectedPageId)?.name || selectedPageId}</span>}
+                                </span>
+                            </div>
                             <SyncButton
                                 icon={Send}
                                 label={syncPancake === 'success' ? '✅ Đã đẩy lên Pancake' : syncPancake === 'error' ? '❌ Lỗi — thử lại' : '📤 Đẩy lên Pancake'}

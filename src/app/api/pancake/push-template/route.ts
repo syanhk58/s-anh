@@ -24,15 +24,51 @@ function loadConfig(): ScriptGeneratorConfig {
     return yaml.load(raw) as ScriptGeneratorConfig;
 }
 
-// ─── GET: Trả về danh sách shops ──────────────────────────────────────────────
+// ─── GET: Trả về danh sách shops + pages ──────────────────────────────────────
 export async function GET() {
     try {
         const config = loadConfig();
-        const shops = config.poscake.shops.map((s) => ({
-            name: s.name,
-            shop_id: s.shop_id,
-        }));
-        return NextResponse.json({ shops });
+        const apiUrl = config.poscake.api_url;
+
+        // Fetch pages cho mỗi shop từ Pancake API
+        const shopsWithPages = await Promise.all(
+            config.poscake.shops.map(async (s) => {
+                let pages: Array<{ id: string; name: string; platform: string }> = [];
+                try {
+                    const res = await fetch(
+                        `${apiUrl}/shops?api_key=${s.api_key}`,
+                        { next: { revalidate: 300 } } // cache 5 phút
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.shops && Array.isArray(data.shops)) {
+                            // Lấy tất cả pages từ tất cả shops returned
+                            for (const shop of data.shops) {
+                                if (shop.pages && Array.isArray(shop.pages)) {
+                                    pages.push(
+                                        ...shop.pages.map((p: { id: string; name: string; platform?: string }) => ({
+                                            id: p.id,
+                                            name: p.name,
+                                            platform: p.platform || "facebook",
+                                        }))
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    // Nếu fetch pages thất bại, trả về shop không có pages
+                    console.warn(`[pancake] Không lấy được pages cho shop ${s.name}`);
+                }
+                return {
+                    name: s.name,
+                    shop_id: s.shop_id,
+                    pages,
+                };
+            })
+        );
+
+        return NextResponse.json({ shops: shopsWithPages });
     } catch (error: unknown) {
         console.error("[pancake/push-template] GET Error:", error);
         return NextResponse.json({ error: "Không đọc được config" }, { status: 500 });

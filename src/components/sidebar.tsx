@@ -26,7 +26,7 @@ const FLAGS = ["🇸🇦", "🇦🇪", "🇶🇦", "🇰🇼", "🇧🇭"];
 
 export default function Sidebar({ activeModule, onModuleChange }: SidebarProps) {
   return (
-    <aside className="flex flex-col w-[240px] min-h-screen bg-[#0f1c4d] text-white select-none shrink-0">
+    <aside className="flex flex-col w-[240px] h-screen sticky top-0 bg-[#0f1c4d] text-white select-none shrink-0 overflow-y-auto">
       {/* Back nav */}
       <div className="flex items-center gap-2 px-5 pt-5 pb-4">
         <button className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors text-sm group">

@@ -91,61 +91,61 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 ===INGREDIENTS_VI===
 🧪 Thành phần:
 
-[Thành phần 1] ([tên tiếng Anh])
-[Thành phần 2] ([tên tiếng Anh])
-[Thành phần 3]
+🔹 [Thành phần 1] ([tên tiếng Anh])
+🔹 [Thành phần 2] ([tên tiếng Anh])
+🔹 [Thành phần 3]
 
 👉 Công dụng chính:
 
-[Công dụng 1]
-[Công dụng 2]
+✅ [Công dụng 1]
+✅ [Công dụng 2]
 
 ===INGREDIENTS_EN===
 🧪 Ingredients:
 
-[Ingredient 1]
-[Ingredient 2]
+🔹 [Ingredient 1]
+🔹 [Ingredient 2]
 
 👉 Key benefits:
 
-[Benefit 1]
-[Benefit 2]
+✅ [Benefit 1]
+✅ [Benefit 2]
 
 ===INGREDIENTS_PH===
 🧪 Mga Sangkap:
 
-[Sangkap 1]
-[Sangkap 2]
+🔹 [Sangkap 1]
+🔹 [Sangkap 2]
 
 👉 Pangunahing benepisyo:
 
-[Benepisyo 1]
-[Benepisyo 2]
+✅ [Benepisyo 1]
+✅ [Benepisyo 2]
 
 ===USAGE_VI===
 📋 Cách sử dụng:
 
-1. [Bước 1]
-2. [Bước 2]
-3. [Bước 3]
+1️⃣ [Bước 1]
+2️⃣ [Bước 2]
+3️⃣ [Bước 3]
 
 ⚠️ Lưu ý: [lưu ý quan trọng]
 
 ===USAGE_EN===
 📋 How to use:
 
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
+1️⃣ [Step 1]
+2️⃣ [Step 2]
+3️⃣ [Step 3]
 
 ⚠️ Note: [important note]
 
 ===USAGE_PH===
 📋 Paano gamitin:
 
-1. [Hakbang 1]
-2. [Hakbang 2]
-3. [Hakbang 3]
+1️⃣ [Hakbang 1]
+2️⃣ [Hakbang 2]
+3️⃣ [Hakbang 3]
 
 ⚠️ Paalala: [mahalagang paalala]`;
 
@@ -365,28 +365,47 @@ export async function POST(req: NextRequest) {
 
         const groq = new Groq({ apiKey });
 
-        // ══════ STEP 1: Vision ══════
-        const imageParts = imageList.map((img) => ({
-            type: "image_url" as const,
-            image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
-        }));
+        // ══════ STEP 1: Vision (batch max 5 images per request) ══════
+        const MAX_IMAGES_PER_BATCH = 5;
+        const batches: Array<Array<{ base64: string; mimeType: string }>> = [];
+        for (let i = 0; i < imageList.length; i += MAX_IMAGES_PER_BATCH) {
+            batches.push(imageList.slice(i, i + MAX_IMAGES_PER_BATCH));
+        }
 
-        const visionResult = await groq.chat.completions.create({
-            model: "meta-llama/llama-4-scout-17b-16e-instruct",
-            max_tokens: 2000,
-            messages: [
-                { role: "system", content: VISION_PROMPT },
-                {
-                    role: "user",
-                    content: [
-                        ...imageParts,
-                        { type: "text", text: `Đây là ${imageList.length} ảnh của CÙNG 1 sản phẩm. Tổng hợp tất cả thông tin.` },
-                    ],
-                },
-            ],
-        });
+        const descriptions: string[] = [];
+        for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
+            const batch = batches[batchIdx];
+            const imageParts = batch.map((img) => ({
+                type: "image_url" as const,
+                image_url: { url: `data:${img.mimeType};base64,${img.base64}` },
+            }));
 
-        const productDescription = visionResult.choices[0]?.message?.content || "";
+            const batchLabel = batches.length > 1
+                ? `Đây là ảnh nhóm ${batchIdx + 1}/${batches.length} (${batch.length} ảnh) của CÙNG 1 sản phẩm. Tổng hợp tất cả thông tin.`
+                : `Đây là ${batch.length} ảnh của CÙNG 1 sản phẩm. Tổng hợp tất cả thông tin.`;
+
+            const visionResult = await groq.chat.completions.create({
+                model: "meta-llama/llama-4-scout-17b-16e-instruct",
+                max_tokens: 2000,
+                messages: [
+                    { role: "system", content: VISION_PROMPT },
+                    {
+                        role: "user",
+                        content: [
+                            ...imageParts,
+                            { type: "text", text: batchLabel },
+                        ],
+                    },
+                ],
+            });
+
+            const desc = visionResult.choices[0]?.message?.content || "";
+            if (desc.trim()) descriptions.push(desc.trim());
+        }
+
+        const productDescription = descriptions.length > 1
+            ? descriptions.map((d, i) => `[Nhóm ảnh ${i + 1}]\n${d}`).join("\n\n")
+            : descriptions[0] || "";
 
         if (!productDescription.trim()) {
             return NextResponse.json(
