@@ -4,8 +4,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     Upload, ImageIcon, FileText, Sparkles, Copy, Check,
-    FlaskConical, BookOpen, Wand2, X, Loader2, ChevronRight,
-    Bot, Plus, Trash2, Images, AlertCircle, Send, Download
+    FlaskConical, BookOpen, Wand2, X, Loader2, ChevronRight, ChevronDown, ChevronUp,
+    Bot, Plus, Trash2, Images, AlertCircle, Send, Download, Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getTemplateForCategory } from "@/config/sample-templates";
@@ -404,10 +404,36 @@ export default function ScriptGeneratorTab() {
     const [selectedShopId, setSelectedShopId] = useState<string>("");
     const [selectedPageId, setSelectedPageId] = useState<string>("");
 
+    // Page searchable dropdown state
+    const [pageDropdownOpen, setPageDropdownOpen] = useState(false);
+    const [pageSearch, setPageSearch] = useState("");
+    const pageDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (pageDropdownRef.current && !pageDropdownRef.current.contains(e.target as Node)) {
+                setPageDropdownOpen(false);
+                setPageSearch("");
+            }
+        }
+        if (pageDropdownOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }
+    }, [pageDropdownOpen]);
+
     // Get pages for selected shop
     const selectedShop = shops.find(s => s.shop_id === selectedShopId);
     const pagesForShop = selectedShop?.pages || [];
     const totalPages = shops.reduce((sum, s) => sum + (s.pages?.length || 0), 0);
+
+    // Filtered pages by search
+    const filteredPages = pagesForShop.filter(p => {
+        if (!pageSearch.trim()) return true;
+        const q = pageSearch.toLowerCase();
+        return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+    });
 
     // Fetch shop list (with pages) on mount
     useEffect(() => {
@@ -606,26 +632,98 @@ export default function ScriptGeneratorTab() {
                             ))}
                         </select>
                     </div>
-                    {/* Chọn Page */}
-                    <div>
+                    {/* Chọn Page — Searchable Dropdown */}
+                    <div className="relative" ref={pageDropdownRef}>
                         <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wide">
-                            <span className="text-base">📄</span> Chọn Page ({pagesForShop.length} pages)
+                            <span className="text-base">📄</span> Chọn Page <span className="text-orange-500">({pagesForShop.length} PAGES)</span>
                         </label>
-                        <select
-                            value={selectedPageId}
-                            onChange={(e) => setSelectedPageId(e.target.value)}
-                            className="w-full rounded-xl border border-slate-200/80 bg-white px-4 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-orange-400/30 focus:border-orange-300 shadow-sm transition-all"
-                        >
-                            {pagesForShop.length === 0 ? (
-                                <option value="">— Không có page —</option>
-                            ) : (
-                                pagesForShop.map((page) => (
-                                    <option key={page.id} value={page.id}>
-                                        {page.name} ({page.id})
-                                    </option>
-                                ))
+                        {/* Trigger button */}
+                        <button
+                            type="button"
+                            onClick={() => { setPageDropdownOpen(!pageDropdownOpen); setPageSearch(""); }}
+                            className={cn(
+                                "w-full rounded-xl border bg-white px-4 py-2.5 text-left text-sm shadow-sm transition-all flex items-center justify-between gap-2",
+                                pageDropdownOpen
+                                    ? "border-purple-300 ring-2 ring-purple-200/50"
+                                    : "border-slate-200/80 hover:border-slate-300"
                             )}
-                        </select>
+                        >
+                            {selectedPageId ? (
+                                <span className="truncate text-slate-700">
+                                    {pagesForShop.find(p => p.id === selectedPageId)?.name || selectedPageId}
+                                </span>
+                            ) : (
+                                <span className="text-slate-400">Tìm page theo tên hoặc ID...</span>
+                            )}
+                            {pageDropdownOpen ? (
+                                <ChevronUp className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            ) : (
+                                <ChevronDown className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                            )}
+                        </button>
+
+                        {/* Dropdown panel */}
+                        <AnimatePresence>
+                            {pageDropdownOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    transition={{ duration: 0.15 }}
+                                    className="absolute z-50 mt-1.5 w-full rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden"
+                                >
+                                    {/* Search input */}
+                                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100">
+                                        <Search className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                                        <input
+                                            type="text"
+                                            autoFocus
+                                            placeholder="Tìm page theo tên hoặc ID..."
+                                            value={pageSearch}
+                                            onChange={(e) => setPageSearch(e.target.value)}
+                                            className="w-full text-sm text-slate-700 placeholder:text-slate-400 outline-none bg-transparent"
+                                        />
+                                    </div>
+
+                                    {/* List */}
+                                    <div className="max-h-[280px] overflow-y-auto">
+                                        {/* Header */}
+                                        <div className="px-4 py-2 text-xs font-bold text-slate-500 bg-slate-50/80 border-b border-slate-100 sticky top-0">
+                                            Tất cả pages ({filteredPages.length})
+                                        </div>
+
+                                        {filteredPages.length === 0 ? (
+                                            <div className="px-4 py-6 text-center text-sm text-slate-400">
+                                                Không tìm thấy page nào
+                                            </div>
+                                        ) : (
+                                            filteredPages.map((page) => (
+                                                <button
+                                                    key={page.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedPageId(page.id);
+                                                        setPageDropdownOpen(false);
+                                                        setPageSearch("");
+                                                    }}
+                                                    className={cn(
+                                                        "w-full text-left px-4 py-2.5 hover:bg-purple-50/60 transition-colors border-b border-slate-50 last:border-0",
+                                                        selectedPageId === page.id && "bg-purple-50"
+                                                    )}
+                                                >
+                                                    <div className="text-sm font-medium text-slate-700 leading-snug">
+                                                        {page.name}
+                                                    </div>
+                                                    <div className="text-[11px] text-slate-400 mt-0.5">
+                                                        {page.id}
+                                                    </div>
+                                                </button>
+                                            ))
+                                        )}
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
                 {/* Selected page badge */}
