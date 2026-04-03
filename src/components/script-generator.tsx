@@ -52,7 +52,8 @@ async function analyzeProduct(
     country: string,
     currency: string,
     priceCombo1: string,
-    priceCombo2: string
+    priceCombo2: string,
+    langs?: string[]
 ): Promise<GeneratedOutput> {
     const imageList = images.map((img) => ({
         base64: img.dataUrl.split(",")[1],
@@ -71,6 +72,7 @@ async function analyzeProduct(
                 currency,
                 priceCombo1,
                 priceCombo2,
+                langs,
             }),
         });
 
@@ -374,6 +376,15 @@ export default function ScriptGeneratorTab() {
     const [priceCombo2, setPriceCombo2] = useState("");
     const [filterCategory, setFilterCategory] = useState("");
 
+    // Language selection (VI always on)
+    const [selectedLangs, setSelectedLangs] = useState<Record<string, boolean>>({
+        vi: true, en: true, ph: false, id: false,
+    });
+    const toggleLang = (lang: string) => {
+        if (lang === 'vi') return; // VI luôn bật
+        setSelectedLangs(prev => ({ ...prev, [lang]: !prev[lang] }));
+    };
+
     // ─── Auto-suggest templates based on filters ─────────────────────────────
     const COUNTRY_LABELS: Record<string, string> = {
         SA: "Saudi Arabia", AE: "UAE", KW: "Kuwait", OM: "Oman",
@@ -478,6 +489,9 @@ export default function ScriptGeneratorTab() {
         setOutput(null);
 
         const currency = COUNTRY_CURRENCIES[filterCountry] || "USD";
+        const activeLangs = Object.entries(selectedLangs)
+            .filter(([, v]) => v)
+            .map(([k]) => k);
         const result = await analyzeProduct(
             productImages,
             samplePitch,
@@ -485,7 +499,8 @@ export default function ScriptGeneratorTab() {
             filterCountry,
             currency,
             priceCombo1,
-            priceCombo2
+            priceCombo2,
+            activeLangs
         );
         setOutput(result);
         setIsGenerating(false);
@@ -830,6 +845,36 @@ export default function ScriptGeneratorTab() {
                                 <option value="other">📋 Khác</option>
                             </select>
                         </div>
+                        {/* Chọn ngôn ngữ */}
+                        <div>
+                            <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wide">
+                                🌐 Ngôn ngữ đầu ra
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {[
+                                    { key: 'vi', label: '🇻🇳 VI', fixed: true },
+                                    { key: 'en', label: '🇬🇧 EN', fixed: false },
+                                    { key: 'ph', label: '🇵🇭 PH', fixed: false },
+                                    { key: 'id', label: '🇮🇩 ID', fixed: false },
+                                ].map((lang) => (
+                                    <button
+                                        key={lang.key}
+                                        type="button"
+                                        onClick={() => toggleLang(lang.key)}
+                                        disabled={lang.fixed}
+                                        className={cn(
+                                            "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all",
+                                            selectedLangs[lang.key]
+                                                ? "bg-violet-500 text-white border-violet-500 shadow-sm"
+                                                : "bg-white text-slate-400 border-slate-200 hover:border-violet-300 hover:text-violet-500",
+                                            lang.fixed && "opacity-90 cursor-default"
+                                        )}
+                                    >
+                                        {lang.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
 
                     {/* 2. Sample Pitch */}
@@ -918,7 +963,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-amber-500"
                         isLoading={isGenerating}
                     />
-                    <OutputCard
+                    {selectedLangs.en && <OutputCard
                         icon={Sparkles}
                         label="🇬🇧 Sales Pitch (English)"
                         content={output?.pitchEn || ""}
@@ -926,8 +971,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-blue-50/50 to-sky-50/30"
                         iconColorClass="text-blue-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.ph && <OutputCard
                         icon={Sparkles}
                         label="🇵🇭 Sales Pitch (Filipino)"
                         content={output?.pitchPh || ""}
@@ -935,8 +980,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-red-50/50 to-rose-50/30"
                         iconColorClass="text-red-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.id && <OutputCard
                         icon={Sparkles}
                         label="🇮🇩 Sales Pitch (Indonesia)"
                         content={output?.pitchId || ""}
@@ -944,7 +989,7 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-rose-50/50 to-pink-50/30"
                         iconColorClass="text-rose-500"
                         isLoading={isGenerating}
-                    />
+                    />}
                     {/* Nút đẩy Pancake (shop + page đã chọn ở trên) */}
                     {output && output.pitchVi && (
                         <div className="flex flex-col gap-2">
@@ -977,7 +1022,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-cyan-500"
                         isLoading={isGenerating}
                     />
-                    <OutputCard
+                    {selectedLangs.en && <OutputCard
                         icon={Bot}
                         label="🤖 Botcake (English)"
                         content={output?.botcakeEn || ""}
@@ -985,8 +1030,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-teal-50/50 to-cyan-50/30"
                         iconColorClass="text-teal-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.id && <OutputCard
                         icon={Bot}
                         label="🤖 Botcake (Indonesia)"
                         content={output?.botcakeId || ""}
@@ -994,7 +1039,7 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-sky-50/50 to-blue-50/30"
                         iconColorClass="text-sky-500"
                         isLoading={isGenerating}
-                    />
+                    />}
                     {/* Nút tải Botcake training file */}
                     {output && output.botcakeVi && (
                         <SyncButton
@@ -1018,7 +1063,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-emerald-500"
                         isLoading={isGenerating}
                     />
-                    <OutputCard
+                    {selectedLangs.en && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Ingredients (EN)"
                         content={output?.ingredientsEn || ""}
@@ -1026,8 +1071,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-green-50/50 to-emerald-50/30"
                         iconColorClass="text-green-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.ph && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Sangkap (PH)"
                         content={output?.ingredientsPh || ""}
@@ -1035,8 +1080,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-lime-50/50 to-green-50/30"
                         iconColorClass="text-lime-600"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.id && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Komposisi (ID)"
                         content={output?.ingredientsId || ""}
@@ -1044,7 +1089,7 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-teal-50/50 to-emerald-50/30"
                         iconColorClass="text-teal-600"
                         isLoading={isGenerating}
-                    />
+                    />}
                     <OutputCard
                         icon={BookOpen}
                         label="📋 HDSD (VI)"
@@ -1054,7 +1099,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-violet-500"
                         isLoading={isGenerating}
                     />
-                    <OutputCard
+                    {selectedLangs.en && <OutputCard
                         icon={BookOpen}
                         label="📋 Usage (EN)"
                         content={output?.usageEn || ""}
@@ -1062,8 +1107,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-purple-50/50 to-indigo-50/30"
                         iconColorClass="text-purple-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.ph && <OutputCard
                         icon={BookOpen}
                         label="📋 Paano gamitin (PH)"
                         content={output?.usagePh || ""}
@@ -1071,8 +1116,8 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-fuchsia-50/50 to-purple-50/30"
                         iconColorClass="text-fuchsia-500"
                         isLoading={isGenerating}
-                    />
-                    <OutputCard
+                    />}
+                    {selectedLangs.id && <OutputCard
                         icon={BookOpen}
                         label="📋 Cara penggunaan (ID)"
                         content={output?.usageId || ""}
@@ -1080,7 +1125,7 @@ export default function ScriptGeneratorTab() {
                         gradientClass="bg-gradient-to-br from-pink-50/50 to-fuchsia-50/30"
                         iconColorClass="text-pink-500"
                         isLoading={isGenerating}
-                    />
+                    />}
                 </div>
             </div>
         </div>

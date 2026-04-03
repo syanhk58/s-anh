@@ -15,7 +15,12 @@ Hãy tổng hợp thông tin từ TẤT CẢ các ảnh:
 Mô tả TOÀN BỘ thông tin tổng hợp từ các ảnh. Viết bằng tiếng Việt.`;
 
 // ─── Step 2: Writer — viết kịch bản đa ngôn ngữ ──────────────────────────────
-function getWriterPrompt(samplePitch?: string, sampleBotcake?: string, currency?: string, priceCombo1?: string, priceCombo2?: string) {
+function getWriterPrompt(samplePitch?: string, sampleBotcake?: string, currency?: string, priceCombo1?: string, priceCombo2?: string, langs?: string[]) {
+    const activeLangs = langs || ['vi', 'en'];
+    const hasEn = activeLangs.includes('en');
+    const hasPh = activeLangs.includes('ph');
+    const hasId = activeLangs.includes('id');
+    const sectionCount = 3 + (hasEn ? 2 : 0) + (hasPh ? 2 : 0) + (hasId ? 2 : 0); // VI always has 3 (pitch+botcake+ingredients+usage=5, but EN/PH/ID add 2 each)
     // Build pricing instruction
     const cur = currency || "USD";
     const p1 = priceCombo1 ? `${priceCombo1} ${cur}` : `[GIÁ] ${cur}`;
@@ -28,7 +33,7 @@ QUY TẮC BẮT BUỘC VỀ GIÁ VÀ ĐỒNG TIỀN:
 - Combo 2 / Option 2: ${p2}
 - Mọi chỗ có giá phải ghi đúng ${cur}, ví dụ: "${p1}" không phải "$${priceCombo1 || '99'}"
 
-Dựa vào ảnh sản phẩm, viết đầy đủ 11 sections.
+Dựa vào ảnh sản phẩm, viết đầy đủ ${sectionCount + 2} sections.
 Mỗi section bắt đầu bằng ===SECTION_NAME===
 Mỗi bullet/emoji phải nằm trên 1 DÒNG RIÊNG, KHÔNG viết liền thành 1 đoạn. Viết text thuần với các section markers bên dưới.
 Mỗi section bắt đầu bằng ===TÊN_SECTION=== trên 1 dòng riêng.
@@ -66,10 +71,13 @@ KHÔNG thay đổi cấu trúc giá — giữ nguyên chính xác wording.` : `V
 👉 Đặt hàng ngay để nhận ưu đãi!`}
 
 ===PITCH_EN===
-${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
+${hasEn ? (samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`) : `Bỏ qua section này, viết "SKIP"`}
 
-===PITCH_PH===
-${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Filipino. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Filipino cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
+${hasPh ? `===PITCH_PH===
+${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Filipino. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Filipino cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}` : ''}
+
+${hasId ? `===PITCH_ID===
+${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}` : ''}
 
 ===BOTCAKE_VI===
 ${sampleBotcake?.trim() ? `COPY Y HỆT format, labels, cấu trúc, giá, đồng tiền từ MẪU BOTCAKE bên dưới.
@@ -85,8 +93,8 @@ CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch b
 [Chốt đơn]: Bạn gửi mình: Tên + SĐT + Địa chỉ để mình xử lý ngay nhé! 📦
 [Xác nhận]: Đã ghi nhận đơn! Giao trong 2-3 ngày. Cảm ơn bạn! 🙏`}
 
-===BOTCAKE_EN===
-${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh của kịch bản chatbot, cùng format.`}
+${hasEn ? `===BOTCAKE_EN===
+${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh của kịch bản chatbot, cùng format.`}` : ''}
 
 ===INGREDIENTS_VI===
 🧪 Thành phần:
@@ -100,7 +108,7 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 ✅ [Công dụng 1]
 ✅ [Công dụng 2]
 
-===INGREDIENTS_EN===
+${hasEn ? `===INGREDIENTS_EN===
 🧪 Ingredients:
 
 🔹 [Ingredient 1]
@@ -109,9 +117,9 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 👉 Key benefits:
 
 ✅ [Benefit 1]
-✅ [Benefit 2]
+✅ [Benefit 2]` : ''}
 
-===INGREDIENTS_PH===
+${hasPh ? `===INGREDIENTS_PH===
 🧪 Mga Sangkap:
 
 🔹 [Sangkap 1]
@@ -120,8 +128,18 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 👉 Pangunahing benepisyo:
 
 ✅ [Benepisyo 1]
-✅ [Benepisyo 2]
+✅ [Benepisyo 2]` : ''}
 
+${hasId ? `===INGREDIENTS_ID===
+🧪 Komposisi:
+
+🔹 [Bahan 1]
+🔹 [Bahan 2]
+
+👉 Manfaat utama:
+
+✅ [Manfaat 1]
+✅ [Manfaat 2]` : ''}
 
 ===USAGE_VI===
 📋 Cách sử dụng:
@@ -132,24 +150,32 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 
 ⚠️ Lưu ý: [lưu ý quan trọng]
 
-===USAGE_EN===
+${hasEn ? `===USAGE_EN===
 📋 How to use:
 
 1️⃣ [Step 1]
 2️⃣ [Step 2]
 3️⃣ [Step 3]
 
-⚠️ Note: [important note]
+⚠️ Note: [important note]` : ''}
 
-===USAGE_PH===
+${hasPh ? `===USAGE_PH===
 📋 Paano gamitin:
 
 1️⃣ [Hakbang 1]
 2️⃣ [Hakbang 2]
 3️⃣ [Hakbang 3]
 
-⚠️ Paalala: [mahalagang paalala]
+⚠️ Paalala: [mahalagang paalala]` : ''}
 
+${hasId ? `===USAGE_ID===
+📋 Cara penggunaan:
+
+1️⃣ [Langkah 1]
+2️⃣ [Langkah 2]
+3️⃣ [Langkah 3]
+
+⚠️ Catatan: [catatan penting]` : ''}
 `;
 
     if (samplePitch?.trim()) {
@@ -350,7 +376,8 @@ Stop conditions:
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { imageBase64, images, mediaType, samplePitch, sampleBotcake, country, currency, priceCombo1, priceCombo2 } = body;
+        const { imageBase64, images, mediaType, samplePitch, sampleBotcake, country, currency, priceCombo1, priceCombo2, langs } = body;
+        const activeLangs: string[] = Array.isArray(langs) ? langs : ['vi', 'en'];
 
         const imageList: Array<{ base64: string; mimeType: string }> = [];
         if (images && Array.isArray(images)) {
@@ -421,75 +448,23 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        // ══════ STEP 2a: Writer 70B — 11 sections (VI/EN/PH) ══════
+        // ══════ STEP 2: Writer 70B — dynamic sections based on langs ══════
+        const sectionCount = 5 + (activeLangs.includes('en') ? 4 : 0) + (activeLangs.includes('ph') ? 2 : 0) + (activeLangs.includes('id') ? 4 : 0);
         const writerResult = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
             max_tokens: 8000,
             temperature: 0.7,
             messages: [
-                { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2) },
+                { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2, activeLangs) },
                 {
                     role: "user",
-                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả 11 sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
+                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả ${sectionCount} sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
                 },
             ],
         });
 
         const rawText = writerResult.choices[0]?.message?.content || "";
         const p = parseSections(rawText);
-
-        // ══════ STEP 2b: Dịch sang tiếng Indonesia (4 sections) ══════
-        const idSourceContent = `Dịch các nội dung sau sang tiếng Indonesia (Bahasa Indonesia).
-Giữ nguyên 100% cấu trúc, emoji, giá cả, đồng tiền. CHỈ dịch text.
-
-===NỘI DUNG CẦN DỊCH===
-
---- PITCH (English) ---
-${p.pitchEn}
-
---- BOTCAKE (English) ---
-${p.botcakeEn}
-
---- INGREDIENTS (English) ---
-${p.ingredientsEn}
-
---- USAGE (English) ---
-${p.usageEn}
-
-===YÊU CẦU OUTPUT===
-Trả về đúng 4 sections với markers:
-===PITCH_ID===
-[bản dịch pitch]
-===BOTCAKE_ID===
-[bản dịch botcake]
-===INGREDIENTS_ID===
-[bản dịch ingredients]
-===USAGE_ID===
-[bản dịch usage]`;
-
-        try {
-            const idResult = await groq.chat.completions.create({
-                model: "llama-3.3-70b-versatile",
-                max_tokens: 4000,
-                temperature: 0.5,
-                messages: [
-                    { role: "system", content: "Bạn là dịch giả chuyên nghiệp Anh → Indonesia. Dịch chính xác, giữ nguyên format, emoji, giá." },
-                    { role: "user", content: idSourceContent },
-                ],
-            });
-
-            const idRaw = idResult.choices[0]?.message?.content || "";
-            const idParsed = parseSections(idRaw);
-            // Merge Indonesian results into main object
-            p.pitchId = idParsed.pitchId || "";
-            p.botcakeId = idParsed.botcakeId || "";
-            p.ingredientsId = idParsed.ingredientsId || "";
-            p.usageId = idParsed.usageId || "";
-        } catch {
-            console.warn("[analyze-product] Indonesian translation failed, continuing without ID");
-
-            // Continue without Indonesian — not critical
-        }
 
         // ══════ Post-process: Wrap Botcake scripts into structured prompt ══════
         const botcakeViStructured = buildStructuredBotcake({
@@ -499,20 +474,20 @@ Trả về đúng 4 sections với markers:
             usage: p.usageVi,
             lang: "vi",
         });
-        const botcakeEnStructured = buildStructuredBotcake({
+        const botcakeEnStructured = activeLangs.includes('en') ? buildStructuredBotcake({
             chatbotScript: p.botcakeEn,
             productName: "product",
             ingredients: p.ingredientsEn,
             usage: p.usageEn,
             lang: "en",
-        });
-        const botcakeIdStructured = buildStructuredBotcake({
+        }) : "";
+        const botcakeIdStructured = activeLangs.includes('id') ? buildStructuredBotcake({
             chatbotScript: p.botcakeId || p.botcakeEn,
             productName: "produk",
             ingredients: p.ingredientsId || p.ingredientsEn,
             usage: p.usageId || p.usageEn,
             lang: "en",
-        });
+        }) : "";
 
         return NextResponse.json({
             pitchVi: p.pitchVi,
