@@ -81,13 +81,14 @@ interface PushTemplateRequest {
     pitchVi: string;
     pitchEn: string;
     pitchPh: string;
+    pitchId: string;
     productName?: string;
 }
 
 export async function POST(req: NextRequest) {
     try {
         const body: PushTemplateRequest = await req.json();
-        const { shopId, pitchVi, pitchEn, pitchPh, productName } = body;
+        const { shopId, pitchVi, pitchEn, pitchPh, pitchId, productName } = body;
 
         if (!shopId) {
             return NextResponse.json({ error: "Chưa chọn shop" }, { status: 400 });
@@ -105,11 +106,12 @@ export async function POST(req: NextRequest) {
         const timestamp = new Date().toLocaleDateString("vi-VN");
         const slug = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 
-        // Tạo 3 quick reply templates (VI, EN, PH)
+        // Tạo 4 quick reply templates (VI, EN, PH, ID)
         const templates = [
             { shortcut: `/${slug}_vi`, text: pitchVi, name: `🇻🇳 ${label} (${timestamp})` },
             { shortcut: `/${slug}_en`, text: pitchEn, name: `🇬🇧 ${label} EN (${timestamp})` },
             { shortcut: `/${slug}_ph`, text: pitchPh, name: `🇵🇭 ${label} PH (${timestamp})` },
+            { shortcut: `/${slug}_id`, text: pitchId, name: `🇮🇩 ${label} ID (${timestamp})` },
         ];
 
         const results: Array<{ lang: string; success: boolean; error?: string }> = [];

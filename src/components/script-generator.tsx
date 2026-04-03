@@ -22,22 +22,26 @@ interface GeneratedOutput {
     pitchVi: string;
     pitchEn: string;
     pitchPh: string;
+    pitchId: string;
     botcakeVi: string;
     botcakeEn: string;
+    botcakeId: string;
     ingredientsVi: string;
     ingredientsEn: string;
     ingredientsPh: string;
+    ingredientsId: string;
     usageVi: string;
     usageEn: string;
     usagePh: string;
+    usageId: string;
     error?: string;
 }
 
 const EMPTY_OUTPUT: GeneratedOutput = {
-    pitchVi: "", pitchEn: "", pitchPh: "",
-    botcakeVi: "", botcakeEn: "",
-    ingredientsVi: "", ingredientsEn: "", ingredientsPh: "",
-    usageVi: "", usageEn: "", usagePh: "",
+    pitchVi: "", pitchEn: "", pitchPh: "", pitchId: "",
+    botcakeVi: "", botcakeEn: "", botcakeId: "",
+    ingredientsVi: "", ingredientsEn: "", ingredientsPh: "", ingredientsId: "",
+    usageVi: "", usageEn: "", usagePh: "", usageId: "",
 };
 
 // ─── Call API — gửi TẤT CẢ ảnh cùng lúc cho 1 sản phẩm ──────────────────────
@@ -80,14 +84,18 @@ async function analyzeProduct(
             pitchVi: data.pitchVi || "",
             pitchEn: data.pitchEn || "",
             pitchPh: data.pitchPh || "",
+            pitchId: data.pitchId || "",
             botcakeVi: data.botcakeVi || "",
             botcakeEn: data.botcakeEn || "",
+            botcakeId: data.botcakeId || "",
             ingredientsVi: data.ingredientsVi || "",
             ingredientsEn: data.ingredientsEn || "",
             ingredientsPh: data.ingredientsPh || "",
+            ingredientsId: data.ingredientsId || "",
             usageVi: data.usageVi || "",
             usageEn: data.usageEn || "",
             usagePh: data.usagePh || "",
+            usageId: data.usageId || "",
         };
     } catch (err) {
         return { ...EMPTY_OUTPUT, error: err instanceof Error ? err.message : "Network error" };
@@ -512,6 +520,7 @@ export default function ScriptGeneratorTab() {
                     pitchVi: output.pitchVi,
                     pitchEn: output.pitchEn,
                     pitchPh: output.pitchPh,
+                    pitchId: output.pitchId,
                 }),
             });
             const data = await res.json();
@@ -927,6 +936,15 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-red-500"
                         isLoading={isGenerating}
                     />
+                    <OutputCard
+                        icon={Sparkles}
+                        label="🇮🇩 Sales Pitch (Indonesia)"
+                        content={output?.pitchId || ""}
+                        emptyText="Indonesian version"
+                        gradientClass="bg-gradient-to-br from-rose-50/50 to-pink-50/30"
+                        iconColorClass="text-rose-500"
+                        isLoading={isGenerating}
+                    />
                     {/* Nút đẩy Pancake (shop + page đã chọn ở trên) */}
                     {output && output.pitchVi && (
                         <div className="flex flex-col gap-2">
@@ -966,6 +984,15 @@ export default function ScriptGeneratorTab() {
                         emptyText="Botcake English"
                         gradientClass="bg-gradient-to-br from-teal-50/50 to-cyan-50/30"
                         iconColorClass="text-teal-500"
+                        isLoading={isGenerating}
+                    />
+                    <OutputCard
+                        icon={Bot}
+                        label="🤖 Botcake (Indonesia)"
+                        content={output?.botcakeId || ""}
+                        emptyText="Botcake Indonesian"
+                        gradientClass="bg-gradient-to-br from-sky-50/50 to-blue-50/30"
+                        iconColorClass="text-sky-500"
                         isLoading={isGenerating}
                     />
                     {/* Nút tải Botcake training file */}
@@ -1010,6 +1037,15 @@ export default function ScriptGeneratorTab() {
                         isLoading={isGenerating}
                     />
                     <OutputCard
+                        icon={FlaskConical}
+                        label="🧪 Komposisi (ID)"
+                        content={output?.ingredientsId || ""}
+                        emptyText="Komposisi Indonesian"
+                        gradientClass="bg-gradient-to-br from-teal-50/50 to-emerald-50/30"
+                        iconColorClass="text-teal-600"
+                        isLoading={isGenerating}
+                    />
+                    <OutputCard
                         icon={BookOpen}
                         label="📋 HDSD (VI)"
                         content={output?.usageVi || ""}
@@ -1034,6 +1070,15 @@ export default function ScriptGeneratorTab() {
                         emptyText="Usage Filipino"
                         gradientClass="bg-gradient-to-br from-fuchsia-50/50 to-purple-50/30"
                         iconColorClass="text-fuchsia-500"
+                        isLoading={isGenerating}
+                    />
+                    <OutputCard
+                        icon={BookOpen}
+                        label="📋 Cara penggunaan (ID)"
+                        content={output?.usageId || ""}
+                        emptyText="Cara penggunaan Indonesian"
+                        gradientClass="bg-gradient-to-br from-pink-50/50 to-fuchsia-50/30"
+                        iconColorClass="text-pink-500"
                         isLoading={isGenerating}
                     />
                 </div>

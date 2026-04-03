@@ -28,7 +28,7 @@ QUY TẮC BẮT BUỘC VỀ GIÁ VÀ ĐỒNG TIỀN:
 - Combo 2 / Option 2: ${p2}
 - Mọi chỗ có giá phải ghi đúng ${cur}, ví dụ: "${p1}" không phải "$${priceCombo1 || '99'}"
 
-Dựa vào ảnh sản phẩm, viết đầy đủ 11 sections.
+Dựa vào ảnh sản phẩm, viết đầy đủ 15 sections.
 Mỗi section bắt đầu bằng ===SECTION_NAME===
 Mỗi bullet/emoji phải nằm trên 1 DÒNG RIÊNG, KHÔNG viết liền thành 1 đoạn. Viết text thuần với các section markers bên dưới.
 Mỗi section bắt đầu bằng ===TÊN_SECTION=== trên 1 dòng riêng.
@@ -71,6 +71,9 @@ ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiế
 ===PITCH_PH===
 ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Filipino. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Filipino cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
 
+===PITCH_ID===
+${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}
+
 ===BOTCAKE_VI===
 ${sampleBotcake?.trim() ? `COPY Y HỆT format, labels, cấu trúc, giá, đồng tiền từ MẪU BOTCAKE bên dưới.
 CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch bản chatbot tiếng Việt:
@@ -87,6 +90,9 @@ CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch b
 
 ===BOTCAKE_EN===
 ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh của kịch bản chatbot, cùng format.`}
+
+===BOTCAKE_ID===
+${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) của kịch bản chatbot, cùng format.`}
 
 ===INGREDIENTS_VI===
 🧪 Thành phần:
@@ -122,6 +128,17 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 ✅ [Benepisyo 1]
 ✅ [Benepisyo 2]
 
+===INGREDIENTS_ID===
+🧪 Komposisi:
+
+🔹 [Bahan 1]
+🔹 [Bahan 2]
+
+👉 Manfaat utama:
+
+✅ [Manfaat 1]
+✅ [Manfaat 2]
+
 ===USAGE_VI===
 📋 Cách sử dụng:
 
@@ -147,7 +164,16 @@ ${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang t
 2️⃣ [Hakbang 2]
 3️⃣ [Hakbang 3]
 
-⚠️ Paalala: [mahalagang paalala]`;
+⚠️ Paalala: [mahalagang paalala]
+
+===USAGE_ID===
+📋 Cara penggunaan:
+
+1️⃣ [Langkah 1]
+2️⃣ [Langkah 2]
+3️⃣ [Langkah 3]
+
+⚠️ Catatan: [catatan penting]`;
 
     if (samplePitch?.trim()) {
         prompt += `\n\n🚨🚨🚨 QUAN TRỌNG NHẤT — MẪU KỊCH BẢN CHÀO HÀNG 🚨🚨🚨
@@ -180,24 +206,28 @@ MẪU GỐC (COPY Y HỆT FORMAT NÀY):
 // ─── Parse sections from AI output ────────────────────────────────────────────
 function parseSections(text: string) {
     const keys = [
-        "pitchVi", "pitchEn", "pitchPh",
-        "botcakeVi", "botcakeEn",
-        "ingredientsVi", "ingredientsEn", "ingredientsPh",
-        "usageVi", "usageEn", "usagePh",
+        "pitchVi", "pitchEn", "pitchPh", "pitchId",
+        "botcakeVi", "botcakeEn", "botcakeId",
+        "ingredientsVi", "ingredientsEn", "ingredientsPh", "ingredientsId",
+        "usageVi", "usageEn", "usagePh", "usageId",
     ];
 
     const markers: Array<{ key: string; pattern: RegExp }> = [
         { key: "pitchVi", pattern: /===PITCH_VI===/i },
         { key: "pitchEn", pattern: /===PITCH_EN===/i },
         { key: "pitchPh", pattern: /===PITCH_PH===/i },
+        { key: "pitchId", pattern: /===PITCH_ID===/i },
         { key: "botcakeVi", pattern: /===BOTCAKE_VI===/i },
         { key: "botcakeEn", pattern: /===BOTCAKE_EN===/i },
+        { key: "botcakeId", pattern: /===BOTCAKE_ID===/i },
         { key: "ingredientsVi", pattern: /===INGREDIENTS_VI===/i },
         { key: "ingredientsEn", pattern: /===INGREDIENTS_EN===/i },
         { key: "ingredientsPh", pattern: /===INGREDIENTS_PH===/i },
+        { key: "ingredientsId", pattern: /===INGREDIENTS_ID===/i },
         { key: "usageVi", pattern: /===USAGE_VI===/i },
         { key: "usageEn", pattern: /===USAGE_EN===/i },
         { key: "usagePh", pattern: /===USAGE_PH===/i },
+        { key: "usageId", pattern: /===USAGE_ID===/i },
     ];
 
     const result: Record<string, string> = {};
@@ -423,7 +453,7 @@ export async function POST(req: NextRequest) {
                 { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2) },
                 {
                     role: "user",
-                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả 11 sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
+                    content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả 15 sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
                 },
             ],
         });
@@ -434,7 +464,7 @@ export async function POST(req: NextRequest) {
         // ══════ Post-process: Wrap Botcake scripts into structured prompt ══════
         const botcakeViStructured = buildStructuredBotcake({
             chatbotScript: p.botcakeVi,
-            productName: "sản phẩm",  // Will be overridden by AI content
+            productName: "sản phẩm",
             ingredients: p.ingredientsVi,
             usage: p.usageVi,
             lang: "vi",
@@ -446,19 +476,31 @@ export async function POST(req: NextRequest) {
             usage: p.usageEn,
             lang: "en",
         });
+        const botcakeIdStructured = buildStructuredBotcake({
+            chatbotScript: p.botcakeId,
+            productName: "produk",
+            ingredients: p.ingredientsId,
+            usage: p.usageId,
+            lang: "en",  // use english-style structured prompt for ID
+        });
+
 
         return NextResponse.json({
             pitchVi: p.pitchVi,
             pitchEn: p.pitchEn,
             pitchPh: p.pitchPh,
+            pitchId: p.pitchId,
             botcakeVi: botcakeViStructured,
             botcakeEn: botcakeEnStructured,
+            botcakeId: botcakeIdStructured,
             ingredientsVi: p.ingredientsVi,
             ingredientsEn: p.ingredientsEn,
             ingredientsPh: p.ingredientsPh,
+            ingredientsId: p.ingredientsId,
             usageVi: p.usageVi,
             usageEn: p.usageEn,
             usagePh: p.usagePh,
+            usageId: p.usageId,
             provider: "groq-2step",
         });
     } catch (error: unknown) {
