@@ -441,12 +441,19 @@ export default function ScriptGeneratorTab() {
     const pagesForShop = selectedShop?.pages || [];
     const totalPages = shops.reduce((sum, s) => sum + (s.pages?.length || 0), 0);
 
-    // Filtered pages by search
-    const filteredPages = pagesForShop.filter(p => {
-        if (!pageSearch.trim()) return true;
-        const q = pageSearch.toLowerCase();
-        return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
-    });
+    // All pages across all shops (for global search)
+    const allPagesWithShop = shops.flatMap(s =>
+        (s.pages || []).map(p => ({ ...p, shopId: s.shop_id, shopName: s.name }))
+    );
+
+    // Filtered pages: when searching, search ALL pages; otherwise show current shop's pages
+    const isSearching = pageSearch.trim().length > 0;
+    const filteredPages = isSearching
+        ? allPagesWithShop.filter(p => {
+            const q = pageSearch.toLowerCase();
+            return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+        })
+        : pagesForShop.map(p => ({ ...p, shopId: selectedShopId, shopName: selectedShop?.name || '' }));
 
     // Fetch shop list (with pages) on mount
     useEffect(() => {
@@ -719,6 +726,10 @@ export default function ScriptGeneratorTab() {
                                                     type="button"
                                                     onClick={() => {
                                                         setSelectedPageId(page.id);
+                                                        // Auto-switch shop if page belongs to a different shop
+                                                        if (page.shopId && page.shopId !== selectedShopId) {
+                                                            setSelectedShopId(page.shopId);
+                                                        }
                                                         setPageDropdownOpen(false);
                                                         setPageSearch("");
                                                     }}
@@ -730,8 +741,13 @@ export default function ScriptGeneratorTab() {
                                                     <div className="text-sm font-medium text-slate-700 leading-snug">
                                                         {page.name}
                                                     </div>
-                                                    <div className="text-[11px] text-slate-400 mt-0.5">
-                                                        {page.id}
+                                                    <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5">
+                                                        <span>{page.id}</span>
+                                                        {isSearching && page.shopName && page.shopId !== selectedShopId && (
+                                                            <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 text-[10px] font-semibold">
+                                                                {page.shopName}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </button>
                                             ))
