@@ -427,9 +427,10 @@ export async function POST(req: NextRequest) {
 
         // ══════ STEP 2: Writer 70B — dynamic sections based on langs ══════
         const sectionCount = 5 + (activeLangs.includes('en') ? 4 : 0) + (activeLangs.includes('ph') ? 2 : 0) + (activeLangs.includes('id') ? 4 : 0);
+        const maxOutputTokens = Math.min(2000 + activeLangs.length * 1500, 8000);
         const writerResult = await groq.chat.completions.create({
             model: "llama-3.3-70b-versatile",
-            max_tokens: 8000,
+            max_tokens: maxOutputTokens,
             temperature: 0.7,
             messages: [
                 { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2, activeLangs) },
