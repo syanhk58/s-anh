@@ -376,14 +376,8 @@ export default function ScriptGeneratorTab() {
     const [priceCombo2, setPriceCombo2] = useState("");
     const [filterCategory, setFilterCategory] = useState("");
 
-    // Language selection (VI always on)
-    const [selectedLangs, setSelectedLangs] = useState<Record<string, boolean>>({
-        vi: true, en: true, ph: false, id: false,
-    });
-    const toggleLang = (lang: string) => {
-        if (lang === 'vi') return; // VI luôn bật
-        setSelectedLangs(prev => ({ ...prev, [lang]: !prev[lang] }));
-    };
+    // Language selection (VI always on, pick 1 extra language)
+    const [selectedLang, setSelectedLang] = useState<string>('en');
 
     // ─── Auto-suggest templates based on filters ─────────────────────────────
     const COUNTRY_LABELS: Record<string, string> = {
@@ -489,9 +483,7 @@ export default function ScriptGeneratorTab() {
         setOutput(null);
 
         const currency = COUNTRY_CURRENCIES[filterCountry] || "USD";
-        const activeLangs = Object.entries(selectedLangs)
-            .filter(([, v]) => v)
-            .map(([k]) => k);
+        const activeLangs = ['vi', selectedLang];
         const result = await analyzeProduct(
             productImages,
             samplePitch,
@@ -848,26 +840,23 @@ export default function ScriptGeneratorTab() {
                         {/* Chọn ngôn ngữ */}
                         <div>
                             <label className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 mb-2 uppercase tracking-wide">
-                                🌐 Ngôn ngữ đầu ra
+                                🌐 Ngôn ngữ đầu ra (+ Tiếng Việt)
                             </label>
                             <div className="flex flex-wrap gap-2">
                                 {[
-                                    { key: 'vi', label: '🇻🇳 VI', fixed: true },
-                                    { key: 'en', label: '🇬🇧 EN', fixed: false },
-                                    { key: 'ph', label: '🇵🇭 PH', fixed: false },
-                                    { key: 'id', label: '🇮🇩 ID', fixed: false },
+                                    { key: 'en', label: '🇬🇧 EN' },
+                                    { key: 'ph', label: '🇵🇭 PH' },
+                                    { key: 'id', label: '🇮🇩 ID' },
                                 ].map((lang) => (
                                     <button
                                         key={lang.key}
                                         type="button"
-                                        onClick={() => toggleLang(lang.key)}
-                                        disabled={lang.fixed}
+                                        onClick={() => setSelectedLang(lang.key)}
                                         className={cn(
                                             "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all",
-                                            selectedLangs[lang.key]
+                                            selectedLang === lang.key
                                                 ? "bg-violet-500 text-white border-violet-500 shadow-sm"
-                                                : "bg-white text-slate-400 border-slate-200 hover:border-violet-300 hover:text-violet-500",
-                                            lang.fixed && "opacity-90 cursor-default"
+                                                : "bg-white text-slate-400 border-slate-200 hover:border-violet-300 hover:text-violet-500"
                                         )}
                                     >
                                         {lang.label}
@@ -963,7 +952,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-amber-500"
                         isLoading={isGenerating}
                     />
-                    {selectedLangs.en && <OutputCard
+                    {selectedLang === 'en' && <OutputCard
                         icon={Sparkles}
                         label="🇬🇧 Sales Pitch (English)"
                         content={output?.pitchEn || ""}
@@ -972,7 +961,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-blue-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.ph && <OutputCard
+                    {selectedLang === 'ph' && <OutputCard
                         icon={Sparkles}
                         label="🇵🇭 Sales Pitch (Filipino)"
                         content={output?.pitchPh || ""}
@@ -981,7 +970,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-red-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.id && <OutputCard
+                    {selectedLang === 'id' && <OutputCard
                         icon={Sparkles}
                         label="🇮🇩 Sales Pitch (Indonesia)"
                         content={output?.pitchId || ""}
@@ -1022,7 +1011,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-cyan-500"
                         isLoading={isGenerating}
                     />
-                    {selectedLangs.en && <OutputCard
+                    {selectedLang === 'en' && <OutputCard
                         icon={Bot}
                         label="🤖 Botcake (English)"
                         content={output?.botcakeEn || ""}
@@ -1031,7 +1020,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-teal-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.id && <OutputCard
+                    {selectedLang === 'id' && <OutputCard
                         icon={Bot}
                         label="🤖 Botcake (Indonesia)"
                         content={output?.botcakeId || ""}
@@ -1063,7 +1052,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-emerald-500"
                         isLoading={isGenerating}
                     />
-                    {selectedLangs.en && <OutputCard
+                    {selectedLang === 'en' && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Ingredients (EN)"
                         content={output?.ingredientsEn || ""}
@@ -1072,7 +1061,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-green-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.ph && <OutputCard
+                    {selectedLang === 'ph' && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Sangkap (PH)"
                         content={output?.ingredientsPh || ""}
@@ -1081,7 +1070,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-lime-600"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.id && <OutputCard
+                    {selectedLang === 'id' && <OutputCard
                         icon={FlaskConical}
                         label="🧪 Komposisi (ID)"
                         content={output?.ingredientsId || ""}
@@ -1099,7 +1088,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-violet-500"
                         isLoading={isGenerating}
                     />
-                    {selectedLangs.en && <OutputCard
+                    {selectedLang === 'en' && <OutputCard
                         icon={BookOpen}
                         label="📋 Usage (EN)"
                         content={output?.usageEn || ""}
@@ -1108,7 +1097,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-purple-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.ph && <OutputCard
+                    {selectedLang === 'ph' && <OutputCard
                         icon={BookOpen}
                         label="📋 Paano gamitin (PH)"
                         content={output?.usagePh || ""}
@@ -1117,7 +1106,7 @@ export default function ScriptGeneratorTab() {
                         iconColorClass="text-fuchsia-500"
                         isLoading={isGenerating}
                     />}
-                    {selectedLangs.id && <OutputCard
+                    {selectedLang === 'id' && <OutputCard
                         icon={BookOpen}
                         label="📋 Cara penggunaan (ID)"
                         content={output?.usageId || ""}
