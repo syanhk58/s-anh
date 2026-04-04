@@ -15,12 +15,12 @@ Hãy tổng hợp thông tin từ TẤT CẢ các ảnh:
 Mô tả TOÀN BỘ thông tin tổng hợp từ các ảnh. Viết bằng tiếng Việt.`;
 
 // ─── Step 2: Writer — viết kịch bản đa ngôn ngữ ──────────────────────────────
-function getWriterPrompt(samplePitch?: string, sampleBotcake?: string, currency?: string, priceCombo1?: string, priceCombo2?: string, langs?: string[]) {
+function getWriterPrompt(samplePitch?: string, currency?: string, priceCombo1?: string, priceCombo2?: string, langs?: string[]) {
     const activeLangs = langs || ['vi', 'en'];
     const hasEn = activeLangs.includes('en');
     const hasPh = activeLangs.includes('ph');
     const hasId = activeLangs.includes('id');
-    const sectionCount = 3 + (hasEn ? 2 : 0) + (hasPh ? 2 : 0) + (hasId ? 2 : 0); // VI always has 3 (pitch+botcake+ingredients+usage=5, but EN/PH/ID add 2 each)
+    const sectionCount = 3 + (hasEn ? 2 : 0) + (hasPh ? 2 : 0) + (hasId ? 2 : 0); // VI: pitch+ingredients+usage=3, EN/PH/ID add pitch+ingredients+usage each
     // Build pricing instruction
     const cur = currency || "USD";
     const p1 = priceCombo1 ? `${priceCombo1} ${cur}` : `[GIÁ] ${cur}`;
@@ -71,23 +71,6 @@ ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiế
 
 ${hasId ? `===PITCH_ID===
 ${samplePitch?.trim() ? `COPY Y HỆT format từ MẪU GỐC, dịch sang tiếng Indonesia (Bahasa Indonesia). Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Indonesia (Bahasa Indonesia) cùng format, cùng emoji, cùng cấu trúc như bản tiếng Việt ở trên.`}` : ''}
-
-===BOTCAKE_VI===
-${sampleBotcake?.trim() ? `COPY Y HỆT format, labels, cấu trúc, giá, đồng tiền từ MẪU BOTCAKE bên dưới.
-CHỈ thay tên sản phẩm và mô tả dựa trên ảnh.` : `Viết kịch bản chatbot tiếng Việt:
-
-[Chào khách]: Chào bạn ơi! 👋 Bạn đang quan tâm đến sản phẩm nào ạ?
-[Giới thiệu SP]: [2-3 câu giới thiệu ngắn]
-[Hỏi nhu cầu]: Bạn muốn mua cho bản thân hay tặng người thân ạ?
-[Trả lời giá]:
-💎 Combo 1: ${p1}
-💎 Combo 2: ${p2} ← Được chọn nhiều nhất!
-🚚 Ship COD miễn phí
-[Chốt đơn]: Bạn gửi mình: Tên + SĐT + Địa chỉ để mình xử lý ngay nhé! 📦
-[Xác nhận]: Đã ghi nhận đơn! Giao trong 2-3 ngày. Cảm ơn bạn! 🙏`}
-
-${hasEn ? `===BOTCAKE_EN===
-${sampleBotcake?.trim() ? `COPY Y HỆT format từ MẪU BOTCAKE, dịch sang tiếng Anh. Giữ nguyên cấu trúc giá, emoji, đồng tiền.` : `Viết bản tiếng Anh của kịch bản chatbot, cùng format.`}` : ''}
 
 ===INGREDIENTS_VI===
 🧪 Thành phần:
@@ -175,10 +158,7 @@ ${hasId ? `===USAGE_ID===
         prompt += `\n\n🚨 MẪU GỐC — COPY Y HỆT format, emoji, giá, đồng tiền. CHỈ thay tên SP và lợi ích.
 """${samplePitch}"""`;
     }
-    if (sampleBotcake?.trim()) {
-        prompt += `\n\n🤖 MẪU BOTCAKE — COPY Y HỆT format, labels, giá. CHỈ thay nội dung SP.
-"""${sampleBotcake}"""`;
-    }
+
 
     return prompt;
 }
@@ -187,7 +167,6 @@ ${hasId ? `===USAGE_ID===
 function parseSections(text: string) {
     const keys = [
         "pitchVi", "pitchEn", "pitchPh", "pitchId",
-        "botcakeVi", "botcakeEn", "botcakeId",
         "ingredientsVi", "ingredientsEn", "ingredientsPh", "ingredientsId",
         "usageVi", "usageEn", "usagePh", "usageId",
     ];
@@ -197,9 +176,6 @@ function parseSections(text: string) {
         { key: "pitchEn", pattern: /===PITCH_EN===/i },
         { key: "pitchPh", pattern: /===PITCH_PH===/i },
         { key: "pitchId", pattern: /===PITCH_ID===/i },
-        { key: "botcakeVi", pattern: /===BOTCAKE_VI===/i },
-        { key: "botcakeEn", pattern: /===BOTCAKE_EN===/i },
-        { key: "botcakeId", pattern: /===BOTCAKE_ID===/i },
         { key: "ingredientsVi", pattern: /===INGREDIENTS_VI===/i },
         { key: "ingredientsEn", pattern: /===INGREDIENTS_EN===/i },
         { key: "ingredientsPh", pattern: /===INGREDIENTS_PH===/i },
@@ -240,120 +216,11 @@ function parseSections(text: string) {
     return result;
 }
 
-// ─── Build structured Botcake prompt from AI chatbot script ───────────────────
-function buildStructuredBotcake(opts: {
-    chatbotScript: string;
-    productName: string;
-    ingredients: string;
-    usage: string;
-    lang: "vi" | "en";
-}): string {
-    const { chatbotScript, ingredients, usage, lang } = opts;
-    if (!chatbotScript.trim()) return "";
 
-    // Extract product name from chatbot script if present
-    const nameMatch = chatbotScript.match(/\[Giới thiệu SP\]:\s*(?:Mình có\s*)?(.+?)(?:\s*[—–-]|\.|\n)/i)
-        || chatbotScript.match(/\[Introduce product\]:\s*(?:We have\s*)?(.+?)(?:\s*[—–-]|\.|\n)/i);
-    const productName = nameMatch ? nameMatch[1].trim() : opts.productName;
-
-    if (lang === "vi") {
-        return `Role:
-Chatbot bán hàng chuyên nghiệp, thân thiện, ngắn gọn cho sản phẩm ${productName}. Trả lời 1-3 câu ngắn, giọng ấm áp, emoji phù hợp. Luôn lịch sự và chuyên nghiệp.
----
-Task:
-- Chào khách hàng và giới thiệu sản phẩm
-- Phát hiện hỏi giá → trả lời ngay với giá + ảnh sản phẩm
-- Trả lời câu hỏi về công dụng, giao hàng, tồn kho, theo dõi đơn hàng
-- Xử lý phản đối chuyên nghiệp
-- Thu thập thông tin đặt hàng (tên, SĐT, địa chỉ) và xác nhận
-- Xác minh địa chỉ, yêu cầu bổ sung nếu chưa rõ
-- Chốt đơn hiệu quả trong 6-8 tin nhắn, tỉ lệ chuyển đổi 55-65%
-- Kết thúc chuyên nghiệp sau xác nhận đơn hoặc khách từ chối
----
-Context:
-- Sản phẩm: ${productName}
-- Thành phần & công dụng:
-${ingredients || "[Thông tin thành phần từ ảnh sản phẩm]"}
-- Hướng dẫn sử dụng:
-${usage || "[Hướng dẫn từ ảnh sản phẩm]"}
-- Kịch bản chatbot:
-${chatbotScript}
----
-Reasoning:
-- Phát hiện keyword hỏi giá → trả lời ngay với giá + ảnh
-- Câu hỏi hiệu quả → gửi feedback khách hàng + lợi ích
-- Ảnh đã gửi → không gửi lại, tham chiếu ảnh trước
-- Địa chỉ mơ hồ → yêu cầu bổ sung trước khi xác nhận
-- Khách do dự → đề xuất giữ promo, max 2-3 lần nhắc nhẹ
-- Khách từ chối rõ → dừng bán, kết thúc lịch sự
-- Tin nhắn ngắn, thân thiện, có emoji
----
-Output format:
-- Câu ngắn, thân thiện (1-3 câu/tin nhắn)
-- Emoji theo template (😍, 🎉, ✅, 🎁, 💎)
-- Gửi URL ảnh đúng quy tắc, không trùng lặp
-- Xác nhận đơn format rõ ràng với labels + emoji
----
-Stop conditions:
-- Kết thúc sau xác nhận đơn thành công
-- Kết thúc nếu khách từ chối sau 2-3 lần nhắc
-- Kết thúc nếu khách không phản hồi
-- Không gửi ảnh/bán thêm sau khi đơn hoàn tất hoặc khách từ chối
----
---- End of structured prompt ---`;
-    }
-
-    // English version
-    return `Role:
-Professional, friendly, and concise sales chatbot for ${productName}. Use short 1-3 sentence responses with warm tone, empathy, and appropriate emoji. Maintain polite and professional demeanor.
----
-Task:
-- Greet customer and introduce product
-- Detect price inquiries → respond immediately with pricing + product images
-- Answer questions about effectiveness, delivery, stock, order tracking
-- Handle objections professionally
-- Collect order info (name, phone, city/area, address) and confirm orders
-- Validate addresses, request details if unclear
-- Close sales efficiently within 6-8 messages targeting 55-65% conversion
-- End professionally after order confirmation or clear decline
----
-Context:
-- Product: ${productName}
-- Ingredients & Benefits:
-${ingredients || "[Product information from images]"}
-- Usage:
-${usage || "[Usage instructions from images]"}
-- Chatbot Scripts:
-${chatbotScript}
----
-Reasoning:
-- On detected price keyword → respond immediately with pricing + images
-- Effectiveness questions → send customer feedback images + benefits
-- Images already sent → do not resend, refer to previous images
-- Vague address → request full details before confirming
-- Customer hesitant → offer to reserve promotion, max 2-3 gentle attempts
-- Customer declines clearly → stop selling, end professionally
-- Short, friendly sentences with emoji for engagement
----
-Output format:
-- Short, friendly sentences (1-3 per message)
-- Include emojis as in templates (😍, 🎉, ✅, 🎁, 💎)
-- Embed image URLs exactly as provided
-- Format order confirmations clearly with labels and emojis
-- Use exact phrases for fallback like "As shown in customer photos above"
----
-Stop conditions:
-- Conversation ends after successful order confirmation
-- Conversation ends if customer clearly declines after 2-3 attempts
-- Conversation ends if customer stops responding
-- Do not continue selling after order completion or clear refusal
----
---- End of structured prompt ---`;
-}
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { imageBase64, images, mediaType, samplePitch, sampleBotcake, country, currency, priceCombo1, priceCombo2, langs } = body;
+        const { imageBase64, images, mediaType, samplePitch, country, currency, priceCombo1, priceCombo2, langs } = body;
         const activeLangs: string[] = Array.isArray(langs) ? langs : ['vi', 'en'];
 
         const imageList: Array<{ base64: string; mimeType: string }> = [];
@@ -433,7 +300,7 @@ export async function POST(req: NextRequest) {
             max_tokens: maxOutputTokens,
             temperature: 0.7,
             messages: [
-                { role: "system", content: getWriterPrompt(samplePitch, sampleBotcake, currency, priceCombo1, priceCombo2, activeLangs) },
+                { role: "system", content: getWriterPrompt(samplePitch, currency, priceCombo1, priceCombo2, activeLangs) },
                 {
                     role: "user",
                     content: `Thông tin sản phẩm:\n\n${productDescription}\n\nViết nội dung marketing đầy đủ tất cả ${sectionCount} sections. KHÔNG JSON, dùng ===SECTION=== markers.`,
@@ -444,37 +311,12 @@ export async function POST(req: NextRequest) {
         const rawText = writerResult.choices[0]?.message?.content || "";
         const p = parseSections(rawText);
 
-        // ══════ Post-process: Wrap Botcake scripts into structured prompt ══════
-        const botcakeViStructured = buildStructuredBotcake({
-            chatbotScript: p.botcakeVi,
-            productName: "sản phẩm",
-            ingredients: p.ingredientsVi,
-            usage: p.usageVi,
-            lang: "vi",
-        });
-        const botcakeEnStructured = activeLangs.includes('en') ? buildStructuredBotcake({
-            chatbotScript: p.botcakeEn,
-            productName: "product",
-            ingredients: p.ingredientsEn,
-            usage: p.usageEn,
-            lang: "en",
-        }) : "";
-        const botcakeIdStructured = activeLangs.includes('id') ? buildStructuredBotcake({
-            chatbotScript: p.botcakeId || p.botcakeEn,
-            productName: "produk",
-            ingredients: p.ingredientsId || p.ingredientsEn,
-            usage: p.usageId || p.usageEn,
-            lang: "en",
-        }) : "";
 
         return NextResponse.json({
             pitchVi: p.pitchVi,
             pitchEn: p.pitchEn,
             pitchPh: p.pitchPh,
             pitchId: p.pitchId,
-            botcakeVi: botcakeViStructured,
-            botcakeEn: botcakeEnStructured,
-            botcakeId: botcakeIdStructured,
             ingredientsVi: p.ingredientsVi,
             ingredientsEn: p.ingredientsEn,
             ingredientsPh: p.ingredientsPh,

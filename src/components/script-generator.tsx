@@ -884,22 +884,7 @@ export default function ScriptGeneratorTab() {
                         />
                     </div>
 
-                    {/* 3. Botcake Sample */}
-                    <div>
-                        <SectionHeader
-                            icon={Bot}
-                            title="Mẫu huấn luyện Botcake AI"
-                            subtitle="Tự động đề xuất theo bộ lọc"
-                            colorClass="from-cyan-500 to-blue-500 shadow-cyan-200/40"
-                        />
-                        <textarea
-                            rows={5}
-                            className={textareaClass}
-                            placeholder="Chọn bộ lọc bên trái → mẫu tự xuất hiện..."
-                            value={sampleBotcake}
-                            onChange={(e) => setSampleBotcake(e.target.value)}
-                        />
-                    </div>
+
                 </div>
 
                 {/* Action Bar */}
@@ -1001,46 +986,7 @@ export default function ScriptGeneratorTab() {
                     )}
                 </div>
 
-                {/* MIDDLE — 2 Botcake boxes */}
-                <div className="flex flex-col gap-3">
-                    <OutputCard
-                        icon={Bot}
-                        label="🤖 Botcake (Tiếng Việt)"
-                        content={output?.botcakeVi || ""}
-                        emptyText="Botcake tiếng Việt"
-                        gradientClass="bg-gradient-to-br from-cyan-50/50 to-blue-50/30"
-                        iconColorClass="text-cyan-500"
-                        isLoading={isGenerating}
-                    />
-                    {selectedLang === 'en' && <OutputCard
-                        icon={Bot}
-                        label="🤖 Botcake (English)"
-                        content={output?.botcakeEn || ""}
-                        emptyText="Botcake English"
-                        gradientClass="bg-gradient-to-br from-teal-50/50 to-cyan-50/30"
-                        iconColorClass="text-teal-500"
-                        isLoading={isGenerating}
-                    />}
-                    {selectedLang === 'id' && <OutputCard
-                        icon={Bot}
-                        label="🤖 Botcake (Indonesia)"
-                        content={output?.botcakeId || ""}
-                        emptyText="Botcake Indonesian"
-                        gradientClass="bg-gradient-to-br from-sky-50/50 to-blue-50/30"
-                        iconColorClass="text-sky-500"
-                        isLoading={isGenerating}
-                    />}
-                    {/* Nút tải Botcake training file */}
-                    {output && output.botcakeVi && (
-                        <SyncButton
-                            icon={Download}
-                            label={syncBotcake === 'success' ? '✅ Đã tải file' : '🤖 Tải file Botcake AI'}
-                            onClick={handleDownloadBotcake}
-                            isLoading={syncBotcake === 'loading'}
-                            variant="botcake"
-                        />
-                    )}
-                </div>
+
 
                 {/* RIGHT — Thành phần (3) + HDSD (3) */}
                 <div className="flex flex-col gap-3">
