@@ -5,16 +5,13 @@ import { cn } from "@/lib/utils";
 import {
     Megaphone, Send, Loader2, Link2, Upload, ImageIcon,
     Video, X, Check, Copy, AlertCircle, ChevronDown,
-    Search, Globe, FileText, Sparkles, Eye, Trash2
+    Search, Globe, FileText, Sparkles, Eye, Trash2, Store
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface FbPage {
-    id: string;
-    name: string;
-    accessToken: string;
-    picture: string;
-}
+interface PancakePage { id: string; name: string; platform: string; }
+interface ShopWithPages { name: string; shop_id: string; pages: PancakePage[]; }
+interface FbPage { id: string; name: string; accessToken: string; picture: string; }
 
 interface MediaItem {
     id: string;
@@ -43,12 +40,30 @@ function CopyBtn({ text }: { text: string }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function PagePostTool() {
-    // Pages
-    const [pages, setPages] = useState<FbPage[]>([]);
-    const [selectedPage, setSelectedPage] = useState<FbPage | null>(null);
+    // ─── Shops + Pages (clone từ script-generator) ────────────────────────────
+    const [shops, setShops] = useState<ShopWithPages[]>([]);
+    const [fbPages, setFbPages] = useState<FbPage[]>([]);
+    const [selectedShopId, setSelectedShopId] = useState<string>("");
+    const [selectedPageId, setSelectedPageId] = useState<string>("");
     const [loadingPages, setLoadingPages] = useState(true);
+
+    // Page searchable dropdown
+    const [pageDropdownOpen, setPageDropdownOpen] = useState(false);
     const [pageSearch, setPageSearch] = useState("");
-    const [showPageDropdown, setShowPageDropdown] = useState(false);
+    const pageDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Computed
+    const selectedShop = shops.find(s => s.shop_id === selectedShopId);
+    const pagesForShop = selectedShop?.pages || [];
+    const totalPages = shops.reduce((sum, s) => sum + (s.pages?.length || 0), 0);
+    const filteredPages = pagesForShop.filter(p => {
+        if (!pageSearch.trim()) return true;
+        const q = pageSearch.toLowerCase();
+        return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+    });
+
+    // Get the FB page token for the selected page
+    const selectedFbPage = fbPages.find(fp => fp.id === selectedPageId);
 
     // Input mode
     const [mode, setMode] = useState<InputMode>("manual");
@@ -68,32 +83,43 @@ export default function PagePostTool() {
 
     // Refs
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // ─── Load pages on mount ──────────────────────────────────────────────────
+    // ─── Load shops + pages on mount (dùng cùng API như script-generator) ─────
     useEffect(() => {
         (async () => {
             try {
                 const res = await fetch("/api/facebook/page-post");
                 const data = await res.json();
-                if (data.pages) setPages(data.pages);
+                if (data.shops) {
+                    setShops(data.shops);
+                    if (data.shops.length > 0) {
+                        setSelectedShopId(data.shops[0].shop_id);
+                        if (data.shops[0].pages?.length > 0) {
+                            setSelectedPageId(data.shops[0].pages[0].id);
+                        }
+                    }
+                }
+                if (data.fbPages) {
+                    setFbPages(data.fbPages);
+                }
             } catch { /* ignore */ }
             setLoadingPages(false);
         })();
     }, []);
 
-    // Close dropdown on outside click
+    // Close page dropdown on outside click
     useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-                setShowPageDropdown(false);
+        function handleClickOutside(e: MouseEvent) {
+            if (pageDropdownRef.current && !pageDropdownRef.current.contains(e.target as Node)) {
+                setPageDropdownOpen(false);
+                setPageSearch("");
             }
-        };
-        document.addEventListener("mousedown", handler);
-        return () => document.removeEventListener("mousedown", handler);
-    }, []);
-
-    const filteredPages = pages.filter(p => p.name.toLowerCase().includes(pageSearch.toLowerCase()));
+        }
+        if (pageDropdownOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }
+    }, [pageDropdownOpen]);
 
     // ─── File upload handler ──────────────────────────────────────────────────
     const handleFiles = useCallback((files: FileList) => {
@@ -137,7 +163,6 @@ export default function PagePostTool() {
                 setScrapeError(data.error);
             } else {
                 if (data.text) setMessage(data.text);
-                // Add scraped images
                 const newMedia: MediaItem[] = [];
                 if (data.images) {
                     data.images.slice(0, 5).forEach((url: string, i: number) => {
@@ -171,14 +196,14 @@ export default function PagePostTool() {
 
     // ─── Post to Page ─────────────────────────────────────────────────────────
     const handlePost = async () => {
-        if (!selectedPage) return;
+        if (!selectedPageId || !selectedFbPage) return;
         setPostStatus("loading");
         setPostResult("");
 
         try {
             const formData = new FormData();
-            formData.append("pageId", selectedPage.id);
-            formData.append("pageToken", selectedPage.accessToken);
+            formData.append("pageId", selectedPageId);
+            formData.append("pageToken", selectedFbPage.accessToken);
             formData.append("message", message);
 
             const hasVideo = media.some(m => m.type === "video");
@@ -221,7 +246,8 @@ export default function PagePostTool() {
         }
     };
 
-    const canPost = selectedPage && (message.trim() || media.length > 0);
+    const selectedPageName = pagesForShop.find(p => p.id === selectedPageId)?.name || "";
+    const canPost = selectedPageId && selectedFbPage && (message.trim() || media.length > 0);
 
     // ─── Render ───────────────────────────────────────────────────────────────
     return (
@@ -237,84 +263,125 @@ export default function PagePostTool() {
                 </div>
             </div>
 
-            {/* ═══ CHỌN PAGE ═══ */}
+            {/* ═══ CHỌN SHOP + PAGE (giống script-generator) ═══ */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
-                <div className="flex items-center gap-2.5 mb-3">
-                    <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                        <Globe className="h-3.5 w-3.5 text-white" />
+                <div className="flex items-center gap-2.5 mb-4">
+                    <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center">
+                        <Store className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <h3 className="text-sm font-bold text-slate-700">① Chọn Page đăng bài</h3>
+                    <h3 className="text-sm font-bold text-slate-700">① Chọn Shop & Page</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-50 text-orange-500 font-bold">{totalPages} pages</span>
                 </div>
 
                 {loadingPages ? (
                     <div className="flex items-center gap-2 text-slate-400 py-4 justify-center">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-xs">Đang tải danh sách pages...</span>
+                        <span className="text-xs">Đang tải danh sách...</span>
                     </div>
-                ) : pages.length === 0 ? (
+                ) : shops.length === 0 ? (
                     <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3">
                         <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
                         <div>
-                            <p className="text-sm font-semibold text-amber-700">Không tìm thấy Pages</p>
-                            <p className="text-xs text-amber-600 mt-1">Kiểm tra lại token Graph API trong config. Cần scope <code className="bg-amber-100 px-1 rounded">pages_manage_posts</code></p>
+                            <p className="text-sm font-semibold text-amber-700">Không tìm thấy Shops</p>
+                            <p className="text-xs text-amber-600 mt-1">Kiểm tra config/script-generator.yaml</p>
                         </div>
                     </div>
                 ) : (
-                    <div className="relative" ref={dropdownRef}>
-                        <button onClick={() => setShowPageDropdown(!showPageDropdown)}
-                            className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
-                                showPageDropdown ? "border-blue-400 bg-blue-50/30 shadow-sm" : "border-slate-200 bg-slate-50/50 hover:border-slate-300")}>
-                            {selectedPage ? (
-                                <>
-                                    {selectedPage.picture && (
-                                        <img src={selectedPage.picture} alt="" className="w-8 h-8 rounded-lg object-cover border border-white shadow-sm" />
-                                    )}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-sm font-bold text-slate-700 truncate">{selectedPage.name}</div>
-                                        <div className="text-[10px] text-slate-400">ID: {selectedPage.id}</div>
-                                    </div>
-                                    <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", showPageDropdown && "rotate-180")} />
-                                </>
-                            ) : (
-                                <>
-                                    <div className="w-8 h-8 rounded-lg bg-slate-200 flex items-center justify-center">
-                                        <Globe className="h-4 w-4 text-slate-400" />
-                                    </div>
-                                    <span className="text-sm text-slate-400 flex-1">Chọn page...</span>
-                                    <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform", showPageDropdown && "rotate-180")} />
-                                </>
-                            )}
-                        </button>
+                    <div className="space-y-3">
+                        {/* Shop tabs */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {shops.map(s => (
+                                <button key={s.shop_id}
+                                    onClick={() => {
+                                        setSelectedShopId(s.shop_id);
+                                        if (s.pages?.length > 0) setSelectedPageId(s.pages[0].id);
+                                        else setSelectedPageId("");
+                                    }}
+                                    className={cn("px-3.5 py-2 rounded-xl text-xs font-bold transition-all border flex items-center gap-2",
+                                        selectedShopId === s.shop_id
+                                            ? "bg-gradient-to-r from-orange-500 to-amber-600 text-white border-orange-500 shadow-md shadow-orange-200/40"
+                                            : "bg-slate-50 text-slate-500 border-slate-200 hover:border-orange-300 hover:bg-orange-50/50")}>
+                                    <Store className="h-3 w-3" />
+                                    {s.name}
+                                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full font-bold",
+                                        selectedShopId === s.shop_id ? "bg-white/20 text-white" : "bg-slate-200 text-slate-400")}>
+                                        {s.pages?.length || 0}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
 
-                        {showPageDropdown && (
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 max-h-64 overflow-hidden">
-                                <div className="p-2 border-b border-slate-100">
-                                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                                        <Search className="h-3.5 w-3.5 text-slate-400" />
-                                        <input value={pageSearch} onChange={e => setPageSearch(e.target.value)}
-                                            placeholder="Tìm page..." autoFocus
-                                            className="flex-1 text-xs bg-transparent outline-none text-slate-700 placeholder:text-slate-300" />
+                        {/* Page dropdown (searchable) */}
+                        <div className="relative" ref={pageDropdownRef}>
+                            <button onClick={() => setPageDropdownOpen(!pageDropdownOpen)}
+                                className={cn("w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left",
+                                    pageDropdownOpen ? "border-blue-400 bg-blue-50/30 shadow-sm" : "border-slate-200 bg-slate-50/50 hover:border-slate-300")}>
+                                <Globe className="h-4 w-4 text-blue-500 shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                    {selectedPageId ? (
+                                        <>
+                                            <div className="text-sm font-bold text-slate-700 truncate">{selectedPageName}</div>
+                                            <div className="text-[10px] text-slate-400">Page ID: {selectedPageId}</div>
+                                        </>
+                                    ) : (
+                                        <span className="text-sm text-slate-400">Chọn page...</span>
+                                    )}
+                                </div>
+                                <ChevronDown className={cn("h-4 w-4 text-slate-400 transition-transform shrink-0", pageDropdownOpen && "rotate-180")} />
+                                {/* Token status */}
+                                {selectedPageId && (
+                                    <span className={cn("text-[9px] px-2 py-0.5 rounded-full font-bold shrink-0",
+                                        selectedFbPage ? "bg-emerald-100 text-emerald-600" : "bg-red-100 text-red-500")}>
+                                        {selectedFbPage ? "✓ Token" : "✗ No Token"}
+                                    </span>
+                                )}
+                            </button>
+
+                            {pageDropdownOpen && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-slate-200 shadow-xl z-50 max-h-64 overflow-hidden">
+                                    <div className="p-2 border-b border-slate-100">
+                                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                                            <Search className="h-3.5 w-3.5 text-slate-400" />
+                                            <input value={pageSearch} onChange={e => setPageSearch(e.target.value)}
+                                                placeholder="Tìm page..." autoFocus
+                                                className="flex-1 text-xs bg-transparent outline-none text-slate-700 placeholder:text-slate-300" />
+                                        </div>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto p-1">
+                                        {filteredPages.length === 0 ? (
+                                            <div className="text-center py-3 text-xs text-slate-400">Không tìm thấy page</div>
+                                        ) : (
+                                            filteredPages.map(p => {
+                                                const hasFbToken = fbPages.some(fp => fp.id === p.id);
+                                                return (
+                                                    <button key={p.id} onClick={() => { setSelectedPageId(p.id); setPageDropdownOpen(false); setPageSearch(""); }}
+                                                        className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left",
+                                                            selectedPageId === p.id ? "bg-blue-50 border border-blue-200" : "hover:bg-slate-50")}>
+                                                        <Globe className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-xs font-bold text-slate-700 truncate">{p.name}</div>
+                                                            <div className="text-[10px] text-slate-400">{p.id} • {p.platform}</div>
+                                                        </div>
+                                                        {hasFbToken
+                                                            ? <span className="text-[9px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded-full font-bold shrink-0">✓ Token</span>
+                                                            : <span className="text-[9px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full font-bold shrink-0">No Token</span>
+                                                        }
+                                                        {selectedPageId === p.id && <Check className="h-4 w-4 text-blue-500 shrink-0" />}
+                                                    </button>
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </div>
-                                <div className="max-h-48 overflow-y-auto p-1">
-                                    {filteredPages.map(p => (
-                                        <button key={p.id} onClick={() => { setSelectedPage(p); setShowPageDropdown(false); setPageSearch(""); }}
-                                            className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left",
-                                                selectedPage?.id === p.id ? "bg-blue-50 border border-blue-200" : "hover:bg-slate-50")}>
-                                            {p.picture ? (
-                                                <img src={p.picture} alt="" className="w-7 h-7 rounded-lg object-cover border border-slate-100" />
-                                            ) : (
-                                                <div className="w-7 h-7 rounded-lg bg-slate-200 flex items-center justify-center">
-                                                    <Globe className="h-3.5 w-3.5 text-slate-400" />
-                                                </div>
-                                            )}
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-xs font-bold text-slate-700 truncate">{p.name}</div>
-                                                <div className="text-[10px] text-slate-400">{p.id}</div>
-                                            </div>
-                                            {selectedPage?.id === p.id && <Check className="h-4 w-4 text-blue-500" />}
-                                        </button>
-                                    ))}
+                            )}
+                        </div>
+
+                        {/* Warning nếu page ko có FB token */}
+                        {selectedPageId && !selectedFbPage && (
+                            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                                <div className="text-[11px] text-amber-700">
+                                    Page <strong>{selectedPageName}</strong> chưa có Facebook token. Cần cấp quyền <code className="bg-amber-100 px-1 rounded text-[10px]">pages_manage_posts</code> trong Graph API Explorer.
                                 </div>
                             </div>
                         )}
@@ -324,7 +391,6 @@ export default function PagePostTool() {
 
             {/* ═══ INPUT MODE TABS ═══ */}
             <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-                {/* Tabs */}
                 <div className="flex border-b border-slate-100">
                     {[
                         { id: "manual" as InputMode, icon: Upload, label: "Upload từ máy", desc: "Ảnh, video, text" },
@@ -346,7 +412,7 @@ export default function PagePostTool() {
                 </div>
 
                 <div className="p-5">
-                    {/* ─── AD LIBRARY MODE ─── */}
+                    {/* AD LIBRARY MODE */}
                     {mode === "adlib" && (
                         <div className="space-y-4">
                             <div className="flex gap-2">
@@ -359,7 +425,7 @@ export default function PagePostTool() {
                                 </div>
                                 <button onClick={handleScrape} disabled={!adUrl.trim() || scraping}
                                     className={cn("flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all",
-                                        adUrl.trim() && !scraping ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-200/50 hover:shadow-violet-300/60" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
+                                        adUrl.trim() && !scraping ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg shadow-violet-200/50" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
                                     {scraping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                                     {scraping ? "Đang scrape..." : "Lấy nội dung"}
                                 </button>
@@ -372,14 +438,12 @@ export default function PagePostTool() {
                             )}
                             <div className="rounded-xl bg-blue-50/50 border border-blue-100 p-3 text-[11px] text-blue-600">
                                 💡 <strong>Cách dùng:</strong> Mở <a href="https://www.facebook.com/ads/library" target="_blank" rel="noopener noreferrer" className="underline font-bold">facebook.com/ads/library</a> → tìm quảng cáo → copy URL → paste vào đây.
-                                Nếu scrape không lấy được media, bạn có thể tải ảnh/video từ quảng cáo rồi upload thủ công bên tab Upload.
                             </div>
                         </div>
                     )}
 
-                    {/* ─── COMMON: Text + Media ─── */}
+                    {/* COMMON: Text + Media */}
                     <div className={cn("space-y-4", mode === "adlib" && "mt-4")}>
-                        {/* Text input */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
@@ -393,7 +457,6 @@ export default function PagePostTool() {
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-300 resize-none transition-all leading-relaxed" />
                         </div>
 
-                        {/* Media upload */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
@@ -408,7 +471,6 @@ export default function PagePostTool() {
                                 )}
                             </div>
 
-                            {/* Upload zone */}
                             <div
                                 onClick={() => fileInputRef.current?.click()}
                                 onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
@@ -424,7 +486,6 @@ export default function PagePostTool() {
                             <input ref={fileInputRef} type="file" multiple accept="image/*,video/*" className="hidden"
                                 onChange={e => { if (e.target.files) handleFiles(e.target.files); e.target.value = ""; }} />
 
-                            {/* Media preview */}
                             {media.length > 0 && (
                                 <div className="grid grid-cols-4 gap-2 mt-3">
                                     {media.map(m => (
@@ -465,15 +526,15 @@ export default function PagePostTool() {
                 {/* Preview card */}
                 <div className="rounded-xl border border-slate-200 bg-slate-50/30 p-4 mb-4">
                     <div className="flex items-center gap-3 mb-3">
-                        {selectedPage?.picture ? (
-                            <img src={selectedPage.picture} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" />
+                        {selectedFbPage?.picture ? (
+                            <img src={selectedFbPage.picture} alt="" className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm" />
                         ) : (
                             <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center">
                                 <Globe className="h-4 w-4 text-slate-400" />
                             </div>
                         )}
                         <div>
-                            <div className="text-sm font-bold text-slate-700">{selectedPage?.name || "Chưa chọn page"}</div>
+                            <div className="text-sm font-bold text-slate-700">{selectedPageName || "Chưa chọn page"}</div>
                             <div className="text-[10px] text-slate-400">Vừa xong · 🌐</div>
                         </div>
                     </div>
@@ -484,7 +545,7 @@ export default function PagePostTool() {
                     )}
                     {media.length > 0 && (
                         <div className={cn("grid gap-1 rounded-lg overflow-hidden",
-                            media.length === 1 ? "grid-cols-1" : media.length === 2 ? "grid-cols-2" : "grid-cols-2"
+                            media.length === 1 ? "grid-cols-1" : "grid-cols-2"
                         )}>
                             {media.slice(0, 4).map((m, i) => (
                                 <div key={m.id} className={cn("relative bg-slate-200", media.length === 1 ? "aspect-video" : "aspect-square")}>
@@ -506,7 +567,7 @@ export default function PagePostTool() {
                     )}
                 </div>
 
-                {/* Status message */}
+                {/* Status */}
                 {postResult && (
                     <div className={cn("rounded-xl p-3 mb-4 flex items-center gap-2 text-xs font-semibold border",
                         postStatus === "success" ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-red-50 text-red-600 border-red-200")}>
@@ -522,15 +583,9 @@ export default function PagePostTool() {
                             ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-blue-200/50 hover:shadow-blue-300/60 hover:scale-[1.005] active:scale-[0.995]"
                             : "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none")}>
                     {postStatus === "loading" ? (
-                        <>
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                            Đang đăng bài...
-                        </>
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Đang đăng bài...</>
                     ) : (
-                        <>
-                            <Send className="h-4 w-4" />
-                            Đăng bài lên {selectedPage?.name || "Page"}
-                        </>
+                        <><Send className="h-4 w-4" /> Đăng bài lên {selectedPageName || "Page"}</>
                     )}
                 </button>
             </div>

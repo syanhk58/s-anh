@@ -3,7 +3,18 @@ import fs from "fs";
 import path from "path";
 import yaml from "js-yaml";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+interface ShopConfig {
+    name: string;
+    api_key: string;
+    shop_id: string;
+}
+
 interface Config {
+    poscake: {
+        api_url: string;
+        shops: ShopConfig[];
+    };
     facebook_messaging: {
         app_id: string;
         user_access_token: string;
@@ -16,36 +27,76 @@ function loadConfig(): Config {
     return yaml.load(raw) as Config;
 }
 
-// ─── GET: Lấy danh sách Pages từ Facebook Graph API ──────────────────────────
+// ─── GET: Lấy danh sách shops + pages (clone từ pancake/push-template) ────────
 export async function GET() {
     try {
         const config = loadConfig();
-        const userToken = config.facebook_messaging.user_access_token;
+        const apiUrl = config.poscake.api_url;
 
-        const res = await fetch(
-            `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture{url}&limit=50&access_token=${userToken}`
+        // Fetch pages cho mỗi shop từ Pancake POS API — giống hệt script-generator
+        const shopsWithPages = await Promise.all(
+            config.poscake.shops.map(async (s) => {
+                let pages: Array<{ id: string; name: string; platform: string }> = [];
+                try {
+                    const res = await fetch(
+                        `${apiUrl}/shops?api_key=${s.api_key}`,
+                        { next: { revalidate: 300 } }
+                    );
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.shops && Array.isArray(data.shops)) {
+                            for (const shop of data.shops) {
+                                if (shop.pages && Array.isArray(shop.pages)) {
+                                    pages.push(
+                                        ...shop.pages.map((p: { id: string; name: string; platform?: string }) => ({
+                                            id: p.id,
+                                            name: p.name,
+                                            platform: p.platform || "facebook",
+                                        }))
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } catch {
+                    console.warn(`[page-post] Không lấy được pages cho shop ${s.name}`);
+                }
+                return {
+                    name: s.name,
+                    shop_id: s.shop_id,
+                    pages,
+                };
+            })
         );
-        const data = await res.json();
 
-        if (data.error) {
-            return NextResponse.json({ error: data.error.message }, { status: 400 });
+        // Cũng lấy page tokens từ Facebook Graph API (dùng cho đăng bài)
+        let fbPages: Array<{ id: string; name: string; accessToken: string; picture: string }> = [];
+        try {
+            const userToken = config.facebook_messaging.user_access_token;
+            const res = await fetch(
+                `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture{url}&limit=50&access_token=${userToken}`
+            );
+            const data = await res.json();
+            if (data.data && Array.isArray(data.data)) {
+                fbPages = data.data.map((p: { id: string; name: string; access_token: string; picture?: { data?: { url?: string } } }) => ({
+                    id: p.id,
+                    name: p.name,
+                    accessToken: p.access_token,
+                    picture: p.picture?.data?.url || "",
+                }));
+            }
+        } catch {
+            console.warn("[page-post] Không lấy được FB pages từ Graph API");
         }
 
-        const pages = (data.data || []).map((p: { id: string; name: string; access_token: string; picture?: { data?: { url?: string } } }) => ({
-            id: p.id,
-            name: p.name,
-            accessToken: p.access_token,
-            picture: p.picture?.data?.url || "",
-        }));
-
-        return NextResponse.json({ pages });
+        return NextResponse.json({ shops: shopsWithPages, fbPages });
     } catch (error: unknown) {
         console.error("[page-post] GET error:", error);
         return NextResponse.json({ error: "Không lấy được danh sách pages" }, { status: 500 });
     }
 }
 
-// ─── POST: Đăng bài lên Page ──────────────────────────────────────────────────
+// ─── POST: Đăng bài lên Page qua Facebook Graph API ──────────────────────────
 export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
@@ -78,7 +129,6 @@ export async function POST(req: NextRequest) {
             const photoFiles: File[] = [];
             const photoUrls: string[] = [];
 
-            // Collect all photo entries
             for (const [key, value] of formData.entries()) {
                 if (key.startsWith("photo") && value instanceof File) {
                     photoFiles.push(value);
@@ -109,7 +159,6 @@ export async function POST(req: NextRequest) {
             if (photoFiles.length > 1 || photoUrls.length > 0) {
                 const photoIds: string[] = [];
 
-                // Upload each file as unpublished
                 for (const file of photoFiles) {
                     const fbForm = new FormData();
                     fbForm.append("source", file);
@@ -123,7 +172,6 @@ export async function POST(req: NextRequest) {
                     if (data.id) photoIds.push(data.id);
                 }
 
-                // Upload URLs as unpublished
                 for (const url of photoUrls) {
                     const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
                         method: "POST",
@@ -138,7 +186,6 @@ export async function POST(req: NextRequest) {
                     if (data.id) photoIds.push(data.id);
                 }
 
-                // Create multi-photo post
                 const attachedMedia = photoIds.map(id => ({ media_fbid: id }));
                 const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
                     method: "POST",
