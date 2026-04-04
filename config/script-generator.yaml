@@ -1,0 +1,58 @@
+# ╔══════════════════════════════════════════════════════╗
+# ║  Script Generator — Config riêng cho tạo kịch bản   ║
+# ║  Sao chép từ talpha.yaml, dùng cho Pancake/Botcake   ║
+# ╚══════════════════════════════════════════════════════╝
+
+# ─── PANCAKE POS SHOPS ───
+# Mỗi shop có API key + Shop ID riêng
+# Dùng để push Quick Reply Templates vào Pancake inbox
+poscake:
+  api_url: "https://pos.pages.fm/api/v1"
+  shops:
+    - name: "Saudi"
+      api_key: "441cc47ce8a740b09bbfec1261696cb0"
+      shop_id: "1328205216"
+    - name: "UAE"
+      api_key: "f8ee67fa7ade46beaf3bc9da2fc81b13"
+      shop_id: "1635200759"
+    - name: "Kuwait"
+      api_key: "667685818bcd4da39a604c5df27f29b5"
+      shop_id: "1328205226"
+    - name: "Oman"
+      api_key: "4f09342a9cd84b8fa630f33f5885a23e"
+      shop_id: "1942200986"
+    - name: "Qatar"
+      api_key: "62a53f9e1b334e97906a583e4d567001"
+      shop_id: "1021271617"
+    - name: "Bahrain"
+      api_key: "72ab4b141a4842579308e2b8cd4d5831"
+      shop_id: "100943483"
+    - name: "Japan"
+      api_key: "de34eb3fc92041ce94a41cde5e78a8f9"
+      shop_id: "100293585"
+    - name: "Taiwan"
+      api_key: "1d5e719041a34861be0076cdb26f9688"
+      shop_id: "1328343252"
+
+# ─── PANCAKE CRM ───
+pancake_crm:
+  api_url: "https://pages.fm/api/v1"
+  api_token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpbmZvIjp7Im9zIjoxLCJjbGllbnRfaXAiOiIxLjUyLjIzMi4xODIiLCJicm93c2VyIjoxLCJkZXZpY2VfdHlwZSI6M30sIm5hbWUiOiJT4bu5IEFuaCIsImV4cCI6MTc4MTY2MzQ0NCwiYXBwbGljYXRpb24iOjEsInVpZCI6IjQxMjUxMzliLTFhNGItNDBjMS04MjQwLWNhYjYwYTRlODFiMSIsInNlc3Npb25faWQiOiJkZTEzODAxYy0zMzY5LTQ4M2EtODY4Zi1hZjc0MTc5NzRkMjMiLCJpYXQiOjE3NzM4ODc0NDQsImZiX2lkIjoiNzQ5NjM4MzA0NzMyMjM5IiwibG9naW5fc2Vzc2lvbiI6bnVsbCwiZmJfbmFtZSI6IlPhu7kgQW5oIn0.8K5HfAn39PSObxzlkHicjua4EXVRL3IjVq8Sy_xHhw8"
+
+# ─── FACEBOOK GRAPH API (Đăng bài lên Page) ───
+# App: Talpha Post (ID: 1492490978955925)
+# ✅ LONG-LIVED USER TOKEN — 60 ngày (tạo 04/04/2026)
+# Scopes: pages_show_list, pages_read_engagement, pages_manage_posts, pages_manage_engagement, publish_video
+# Pages: auto qua /me/accounts
+facebook_messaging:
+  app_id: "1492490978955925"
+  app_secret: "d056d01a049989e8cd8fe7f7cfe3178d"
+  user_access_token: "EAAVNaaKhkpUBROId5cWLuDW8ZBXtRRYYSaQxbRQ4EZBx0evJNDC8DZB7ZBXxDJnWN6dJmCGAb2Yvm2gQ8x5UJGwXZC9X4ZBGmZB9qyx9IGMZB4MefZCTVsU9ZCU8GwzilfLodc8IBZBo10H5tYR64RAJCGemKYtCJA53lzhduqqtFiZAOm4ddSZBqja3JMJkj59UI7LW7"
+  # page_tokens tự lấy qua /me/accounts — không cần hardcode
+
+# ─── BOTCAKE ───
+# Không có API công khai — dùng browser automation hoặc download file
+botcake:
+  method: "browser_automation"  # hoặc "file_download"
+  login_url: ""                 # CẦN BỔ SUNG — URL trang Botcake
+  upload_url: ""                # CẦN BỔ SUNG — URL trang upload file huấn luyện
