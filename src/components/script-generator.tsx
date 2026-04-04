@@ -294,40 +294,83 @@ function OutputCard({
     label,
     content,
     emptyText = "Chưa có dữ liệu",
-    gradientClass,
-    iconColorClass,
+    accentColor = "blue",
     isLoading = false,
 }: {
     icon: React.ElementType;
     label: string;
     content: string;
     emptyText?: string;
-    gradientClass: string;
-    iconColorClass: string;
+    accentColor?: string;
     isLoading?: boolean;
 }) {
     const hasContent = content.trim().length > 0;
+    const [expanded, setExpanded] = useState(false);
+    const isLong = content.length > 400;
+
+    const accentMap: Record<string, { border: string; bg: string; icon: string; glow: string }> = {
+        amber:   { border: "border-l-amber-400",   bg: "from-amber-50/80 to-orange-50/40",  icon: "text-amber-500",   glow: "shadow-amber-100/60" },
+        blue:    { border: "border-l-blue-400",     bg: "from-blue-50/80 to-sky-50/40",      icon: "text-blue-500",    glow: "shadow-blue-100/60" },
+        red:     { border: "border-l-red-400",      bg: "from-red-50/80 to-rose-50/40",      icon: "text-red-500",     glow: "shadow-red-100/60" },
+        rose:    { border: "border-l-rose-400",     bg: "from-rose-50/80 to-pink-50/40",     icon: "text-rose-500",    glow: "shadow-rose-100/60" },
+        emerald: { border: "border-l-emerald-400",  bg: "from-emerald-50/80 to-teal-50/40",  icon: "text-emerald-500", glow: "shadow-emerald-100/60" },
+        green:   { border: "border-l-green-400",    bg: "from-green-50/80 to-emerald-50/40", icon: "text-green-500",   glow: "shadow-green-100/60" },
+        violet:  { border: "border-l-violet-400",   bg: "from-violet-50/80 to-purple-50/40", icon: "text-violet-500",  glow: "shadow-violet-100/60" },
+        purple:  { border: "border-l-purple-400",   bg: "from-purple-50/80 to-indigo-50/40", icon: "text-purple-500",  glow: "shadow-purple-100/60" },
+        teal:    { border: "border-l-teal-400",     bg: "from-teal-50/80 to-cyan-50/40",     icon: "text-teal-500",    glow: "shadow-teal-100/60" },
+        lime:    { border: "border-l-lime-500",     bg: "from-lime-50/80 to-green-50/40",    icon: "text-lime-600",    glow: "shadow-lime-100/60" },
+        pink:    { border: "border-l-pink-400",     bg: "from-pink-50/80 to-fuchsia-50/40",  icon: "text-pink-500",    glow: "shadow-pink-100/60" },
+        fuchsia: { border: "border-l-fuchsia-400",  bg: "from-fuchsia-50/80 to-purple-50/40",icon: "text-fuchsia-500", glow: "shadow-fuchsia-100/60" },
+    };
+    const a = accentMap[accentColor] || accentMap.blue;
 
     return (
-        <div className="rounded-xl border border-slate-200/80 bg-white shadow-sm overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
-                <div className="flex items-center gap-2">
-                    <Icon className={cn("h-4 w-4", iconColorClass)} />
-                    <span className="text-xs font-bold text-slate-600">{label}</span>
+        <div className={cn(
+            "group relative rounded-2xl border border-slate-200/60 bg-white overflow-hidden flex flex-col",
+            "transition-all duration-300 hover:shadow-lg border-l-[3px]",
+            a.border, a.glow,
+            hasContent ? "hover:-translate-y-0.5" : ""
+        )}>
+            {/* Header */}
+            <div className={cn("flex items-center justify-between px-4 py-3 bg-gradient-to-r", a.bg)}>
+                <div className="flex items-center gap-2.5">
+                    <div className={cn("h-7 w-7 rounded-lg bg-white/80 backdrop-blur-sm flex items-center justify-center shadow-sm border border-white/60")}>
+                        <Icon className={cn("h-3.5 w-3.5", a.icon)} />
+                    </div>
+                    <span className="text-[13px] font-bold text-slate-700 tracking-tight">{label}</span>
                 </div>
                 {hasContent && <CopyButton text={content} />}
             </div>
-            <div className={cn("p-4 flex-1 min-h-[120px]", hasContent ? gradientClass : "")}>
+            {/* Body */}
+            <div className={cn("px-4 py-3 flex-1", hasContent ? "min-h-[80px]" : "min-h-[100px]")}>
                 {isLoading && !hasContent ? (
-                    <div className="flex items-center gap-2 text-slate-400 h-full justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span className="text-xs font-medium">Đang phân tích...</span>
+                    <div className="flex flex-col items-center justify-center gap-2 h-full py-6">
+                        <div className="relative">
+                            <div className="h-8 w-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin" />
+                        </div>
+                        <span className="text-[11px] font-medium text-slate-400 animate-pulse">Đang phân tích...</span>
                     </div>
                 ) : hasContent ? (
-                    <pre className="text-[13px] text-slate-700 whitespace-pre-wrap font-sans leading-relaxed">{content}</pre>
+                    <div className="relative">
+                        <pre className={cn(
+                            "text-[12.5px] text-slate-600 whitespace-pre-wrap font-sans leading-[1.7]",
+                            isLong && !expanded && "max-h-[200px] overflow-hidden"
+                        )}>{content}</pre>
+                        {isLong && !expanded && (
+                            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent" />
+                        )}
+                        {isLong && (
+                            <button
+                                onClick={() => setExpanded(!expanded)}
+                                className="mt-1 text-[11px] font-semibold text-blue-500 hover:text-blue-600 transition-colors"
+                            >
+                                {expanded ? "Thu gọn ↑" : "Xem thêm ↓"}
+                            </button>
+                        )}
+                    </div>
                 ) : (
                     <div className="flex items-center justify-center h-full">
-                        <p className="text-xs text-slate-300 font-medium">{emptyText}</p>
+                        <p className="text-[11px] text-slate-300 font-medium italic">{emptyText}</p>
                     </div>
                 )}
             </div>
@@ -925,17 +968,29 @@ export default function ScriptGeneratorTab() {
                 </div>
             )}
 
-            {/* ═══ 3-COLUMN LAYOUT ═══ */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* LEFT — 3 Kịch bản chào hàng */}
-                <div className="flex flex-col gap-3">
+            {/* ═══ OUTPUT SECTION HEADER ═══ */}
+            {(output?.pitchVi || isGenerating) && (
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center shadow-md shadow-indigo-200/50">
+                        <FileText className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-700">Kết quả phân tích</h3>
+                        <p className="text-[11px] text-slate-400">Nội dung được AI tạo — nhấn Sao chép để sử dụng</p>
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ 2-COLUMN MASONRY LAYOUT ═══ */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* LEFT COLUMN — Sales Pitch + Pancake Push */}
+                <div className="flex flex-col gap-4">
                     <OutputCard
                         icon={Sparkles}
                         label="🇻🇳 Kịch bản Tiếng Việt"
                         content={output?.pitchVi || ""}
                         emptyText="Upload ảnh → nhấn Tạo kịch bản"
-                        gradientClass="bg-gradient-to-br from-amber-50/50 to-orange-50/30"
-                        iconColorClass="text-amber-500"
+                        accentColor="amber"
                         isLoading={isGenerating}
                     />
                     {selectedLang === 'en' && <OutputCard
@@ -943,8 +998,7 @@ export default function ScriptGeneratorTab() {
                         label="🇬🇧 Sales Pitch (English)"
                         content={output?.pitchEn || ""}
                         emptyText="English version"
-                        gradientClass="bg-gradient-to-br from-blue-50/50 to-sky-50/30"
-                        iconColorClass="text-blue-500"
+                        accentColor="blue"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'ph' && <OutputCard
@@ -952,8 +1006,7 @@ export default function ScriptGeneratorTab() {
                         label="🇵🇭 Sales Pitch (Filipino)"
                         content={output?.pitchPh || ""}
                         emptyText="Filipino version"
-                        gradientClass="bg-gradient-to-br from-red-50/50 to-rose-50/30"
-                        iconColorClass="text-red-500"
+                        accentColor="red"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'id' && <OutputCard
@@ -961,11 +1014,10 @@ export default function ScriptGeneratorTab() {
                         label="🇮🇩 Sales Pitch (Indonesia)"
                         content={output?.pitchId || ""}
                         emptyText="Indonesian version"
-                        gradientClass="bg-gradient-to-br from-rose-50/50 to-pink-50/30"
-                        iconColorClass="text-rose-500"
+                        accentColor="rose"
                         isLoading={isGenerating}
                     />}
-                    {/* Nút đẩy Pancake (shop + page đã chọn ở trên) */}
+                    {/* Nút đẩy Pancake */}
                     {output && output.pitchVi && (
                         <div className="flex flex-col gap-2">
                             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-orange-50 border border-orange-100">
@@ -986,17 +1038,14 @@ export default function ScriptGeneratorTab() {
                     )}
                 </div>
 
-
-
-                {/* RIGHT — Thành phần (3) + HDSD (3) */}
-                <div className="flex flex-col gap-3">
+                {/* RIGHT COLUMN — Thành phần + HDSD */}
+                <div className="flex flex-col gap-4">
                     <OutputCard
                         icon={FlaskConical}
                         label="🧪 Thành phần (VI)"
                         content={output?.ingredientsVi || ""}
                         emptyText="Thành phần tiếng Việt"
-                        gradientClass="bg-gradient-to-br from-emerald-50/50 to-teal-50/30"
-                        iconColorClass="text-emerald-500"
+                        accentColor="emerald"
                         isLoading={isGenerating}
                     />
                     {selectedLang === 'en' && <OutputCard
@@ -1004,8 +1053,7 @@ export default function ScriptGeneratorTab() {
                         label="🧪 Ingredients (EN)"
                         content={output?.ingredientsEn || ""}
                         emptyText="Ingredients English"
-                        gradientClass="bg-gradient-to-br from-green-50/50 to-emerald-50/30"
-                        iconColorClass="text-green-500"
+                        accentColor="green"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'ph' && <OutputCard
@@ -1013,8 +1061,7 @@ export default function ScriptGeneratorTab() {
                         label="🧪 Sangkap (PH)"
                         content={output?.ingredientsPh || ""}
                         emptyText="Ingredients Filipino"
-                        gradientClass="bg-gradient-to-br from-lime-50/50 to-green-50/30"
-                        iconColorClass="text-lime-600"
+                        accentColor="lime"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'id' && <OutputCard
@@ -1022,8 +1069,7 @@ export default function ScriptGeneratorTab() {
                         label="🧪 Komposisi (ID)"
                         content={output?.ingredientsId || ""}
                         emptyText="Komposisi Indonesian"
-                        gradientClass="bg-gradient-to-br from-teal-50/50 to-emerald-50/30"
-                        iconColorClass="text-teal-600"
+                        accentColor="teal"
                         isLoading={isGenerating}
                     />}
                     <OutputCard
@@ -1031,8 +1077,7 @@ export default function ScriptGeneratorTab() {
                         label="📋 HDSD (VI)"
                         content={output?.usageVi || ""}
                         emptyText="Hướng dẫn sử dụng"
-                        gradientClass="bg-gradient-to-br from-violet-50/50 to-purple-50/30"
-                        iconColorClass="text-violet-500"
+                        accentColor="violet"
                         isLoading={isGenerating}
                     />
                     {selectedLang === 'en' && <OutputCard
@@ -1040,8 +1085,7 @@ export default function ScriptGeneratorTab() {
                         label="📋 Usage (EN)"
                         content={output?.usageEn || ""}
                         emptyText="Usage English"
-                        gradientClass="bg-gradient-to-br from-purple-50/50 to-indigo-50/30"
-                        iconColorClass="text-purple-500"
+                        accentColor="purple"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'ph' && <OutputCard
@@ -1049,8 +1093,7 @@ export default function ScriptGeneratorTab() {
                         label="📋 Paano gamitin (PH)"
                         content={output?.usagePh || ""}
                         emptyText="Usage Filipino"
-                        gradientClass="bg-gradient-to-br from-fuchsia-50/50 to-purple-50/30"
-                        iconColorClass="text-fuchsia-500"
+                        accentColor="fuchsia"
                         isLoading={isGenerating}
                     />}
                     {selectedLang === 'id' && <OutputCard
@@ -1058,8 +1101,7 @@ export default function ScriptGeneratorTab() {
                         label="📋 Cara penggunaan (ID)"
                         content={output?.usageId || ""}
                         emptyText="Cara penggunaan Indonesian"
-                        gradientClass="bg-gradient-to-br from-pink-50/50 to-fuchsia-50/30"
-                        iconColorClass="text-pink-500"
+                        accentColor="pink"
                         isLoading={isGenerating}
                     />}
                 </div>
