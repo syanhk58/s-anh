@@ -513,8 +513,8 @@ export default function ScriptGeneratorTab() {
 
     // ─── Push to Pancake ──────────────────────────────────────────────────────
     const handlePushPancake = async () => {
-        if (!output || !selectedShopId) {
-            alert('⚠️ Chưa chọn shop Pancake!');
+        if (!output || !selectedShopId || !selectedPageId) {
+            alert('⚠️ Chưa chọn shop/page Pancake!');
             return;
         }
         setSyncPancake('loading');
@@ -524,6 +524,7 @@ export default function ScriptGeneratorTab() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     shopId: selectedShopId,
+                    pageId: selectedPageId,
                     pitchVi: output.pitchVi,
                     pitchEn: output.pitchEn,
                     pitchPh: output.pitchPh,

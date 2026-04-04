@@ -15,6 +15,10 @@ interface ScriptGeneratorConfig {
         api_url: string;
         shops: ShopConfig[];
     };
+    pancake_crm: {
+        api_url: string;
+        api_token: string;
+    };
 }
 
 // ─── Load config ──────────────────────────────────────────────────────────────
@@ -42,7 +46,6 @@ export async function GET() {
                     if (res.ok) {
                         const data = await res.json();
                         if (data.shops && Array.isArray(data.shops)) {
-                            // Lấy tất cả pages từ tất cả shops returned
                             for (const shop of data.shops) {
                                 if (shop.pages && Array.isArray(shop.pages)) {
                                     pages.push(
@@ -57,7 +60,6 @@ export async function GET() {
                         }
                     }
                 } catch {
-                    // Nếu fetch pages thất bại, trả về shop không có pages
                     console.warn(`[pancake] Không lấy được pages cho shop ${s.name}`);
                 }
                 return {
@@ -75,9 +77,10 @@ export async function GET() {
     }
 }
 
-// ─── POST: Push Quick Reply Templates ─────────────────────────────────────────
+// ─── POST: Push Quick Reply Templates via Pancake Settings API ────────────────
 interface PushTemplateRequest {
-    shopId: string;       // shop_id để xác định dùng key nào
+    shopId: string;
+    pageId: string;        // page Facebook ID được chọn
     pitchVi: string;
     pitchEn: string;
     pitchPh: string;
@@ -85,87 +88,141 @@ interface PushTemplateRequest {
     productName?: string;
 }
 
+// Pancake Quick Reply message format
+interface QuickReplyMessage {
+    message: string;
+    photos: string[];
+    message_type: string;
+    folders: string[];
+    files: string[];
+}
+
+interface QuickReply {
+    id?: string;
+    messages: QuickReplyMessage[];
+    shortcut: string;
+    type_id: string | null;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body: PushTemplateRequest = await req.json();
-        const { shopId, pitchVi, pitchEn, pitchPh, pitchId, productName } = body;
+        const { shopId, pageId, pitchVi, pitchEn, pitchPh, pitchId, productName } = body;
 
-        if (!shopId) {
-            return NextResponse.json({ error: "Chưa chọn shop" }, { status: 400 });
+        if (!pageId) {
+            return NextResponse.json({ error: "Chưa chọn page Pancake" }, { status: 400 });
         }
 
         const config = loadConfig();
         const shop = config.poscake.shops.find((s) => s.shop_id === shopId);
+        const jwt = config.pancake_crm.api_token;
 
-        if (!shop) {
-            return NextResponse.json({ error: `Không tìm thấy shop ID: ${shopId}` }, { status: 404 });
+        if (!jwt) {
+            return NextResponse.json({ error: "Thiếu JWT token (pancake_crm.api_token)" }, { status: 500 });
         }
 
-        const apiUrl = config.poscake.api_url;
-        const label = productName || "Sản phẩm mới";
+        // ══════ STEP 1: GET current settings ══════
+        const settingsUrl = `https://pancake.vn/api/v1/pages/${pageId}/settings?access_token=${jwt}`;
+        const getRes = await fetch(settingsUrl);
+
+        if (!getRes.ok) {
+            return NextResponse.json({
+                error: `Không thể lấy settings page ${pageId}: HTTP ${getRes.status}`,
+            }, { status: 500 });
+        }
+
+        const settingsData = await getRes.json();
+        const settings = settingsData.settings;
+
+        if (!settings) {
+            return NextResponse.json({ error: "Không có settings cho page này" }, { status: 500 });
+        }
+
+        const currentKey = settings.current_settings_key;
+        const existingQR: QuickReply[] = settings.quick_replies || [];
+
+        // ══════ STEP 2: Build new Quick Replies ══════
+        const label = productName || "Sản phẩm";
         const timestamp = new Date().toLocaleDateString("vi-VN");
         const slug = label.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
 
-        // Tạo 4 quick reply templates (VI, EN, PH, ID)
-        const templates = [
-            { shortcut: `/${slug}_vi`, text: pitchVi, name: `🇻🇳 ${label} (${timestamp})` },
-            { shortcut: `/${slug}_en`, text: pitchEn, name: `🇬🇧 ${label} EN (${timestamp})` },
-            { shortcut: `/${slug}_ph`, text: pitchPh, name: `🇵🇭 ${label} PH (${timestamp})` },
-            { shortcut: `/${slug}_id`, text: pitchId, name: `🇮🇩 ${label} ID (${timestamp})` },
-        ];
+        // Find the "Chào Hàng" type_id from existing types
+        const quickReplyTypes = settings.quick_reply_types || [];
+        const chaoHangType = quickReplyTypes.find(
+            (t: { id: string; text: string }) => t.text.toLowerCase().includes("chào") || t.text.toLowerCase().includes("chao")
+        );
+        const typeId = chaoHangType?.id || null;
 
-        const results: Array<{ lang: string; success: boolean; error?: string }> = [];
-
-        for (const tpl of templates) {
-            if (!tpl.text?.trim()) {
-                results.push({ lang: tpl.name, success: false, error: "Nội dung trống" });
-                continue;
-            }
-
-            try {
-                const res = await fetch(
-                    `${apiUrl}/shops/${shop.shop_id}/quick_replies?api_key=${shop.api_key}`,
-                    {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            name: tpl.name,
-                            shortcut: tpl.shortcut,
-                            text: tpl.text,
-                        }),
-                    }
-                );
-
-                if (res.ok) {
-                    results.push({ lang: tpl.name, success: true });
-                } else {
-                    const errData = await res.json().catch(() => ({}));
-                    results.push({
-                        lang: tpl.name,
-                        success: false,
-                        error: errData?.message || `HTTP ${res.status}`,
-                    });
-                }
-            } catch (err) {
-                results.push({
-                    lang: tpl.name,
-                    success: false,
-                    error: err instanceof Error ? err.message : "Network error",
-                });
-            }
+        // Build templates - only add languages with content
+        const templatesToAdd: Array<{ shortcut: string; text: string; label: string }> = [];
+        
+        if (pitchVi?.trim()) {
+            templatesToAdd.push({ shortcut: `${slug}_vi`, text: pitchVi, label: `🇻🇳 ${label}` });
+        }
+        if (pitchEn?.trim()) {
+            templatesToAdd.push({ shortcut: `${slug}_en`, text: pitchEn, label: `🇬🇧 ${label} EN` });
+        }
+        if (pitchPh?.trim()) {
+            templatesToAdd.push({ shortcut: `${slug}_ph`, text: pitchPh, label: `🇵🇭 ${label} PH` });
+        }
+        if (pitchId?.trim()) {
+            templatesToAdd.push({ shortcut: `${slug}_id`, text: pitchId, label: `🇮🇩 ${label} ID` });
         }
 
-        const successCount = results.filter((r) => r.success).length;
-        const allSuccess = successCount === results.length;
+        if (templatesToAdd.length === 0) {
+            return NextResponse.json({ error: "Không có nội dung nào để đẩy" }, { status: 400 });
+        }
+
+        // Append new QRs to existing list
+        const newQRs: QuickReply[] = templatesToAdd.map((tpl) => ({
+            messages: [{
+                message: tpl.text,
+                photos: [],
+                message_type: "",
+                folders: [],
+                files: [],
+            }],
+            shortcut: tpl.shortcut,
+            type_id: typeId,
+        }));
+
+        const updatedQR = [...existingQR, ...newQRs];
+
+        // ══════ STEP 3: POST updated settings ══════
+        const changes = JSON.stringify({ quick_replies: updatedQR });
+
+        const formData = new URLSearchParams();
+        formData.append("changes", changes);
+        formData.append("current_settings_key", currentKey);
+
+        const postRes = await fetch(settingsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": "https://pancake.vn",
+                "Referer": `https://pancake.vn/${pageId}/setting/reply`,
+            },
+            body: formData.toString(),
+        });
+
+        if (!postRes.ok) {
+            const errText = await postRes.text();
+            return NextResponse.json({
+                error: `Lỗi khi đẩy lên Pancake: HTTP ${postRes.status} - ${errText.slice(0, 200)}`,
+            }, { status: 500 });
+        }
+
+        const postData = await postRes.json();
+        const newCount = postData?.change_settings?.quick_replies?.length || updatedQR.length;
 
         return NextResponse.json({
-            success: allSuccess,
-            message: allSuccess
-                ? `✅ Đã tạo ${successCount} Quick Reply Templates trên shop ${shop.name}!`
-                : `⚠️ ${successCount}/${results.length} thành công trên shop ${shop.name}.`,
-            shopName: shop.name,
-            results,
+            success: true,
+            message: `✅ Đã tạo ${templatesToAdd.length} Quick Reply trên page ${pageId} (shop ${shop?.name || shopId}). Tổng: ${newCount} mẫu.`,
+            shopName: shop?.name || shopId,
+            added: templatesToAdd.map(t => t.label),
+            totalCount: newCount,
         });
+
     } catch (error: unknown) {
         console.error("[pancake/push-template] Error:", error);
         const message = error instanceof Error ? error.message : "Unknown error";
