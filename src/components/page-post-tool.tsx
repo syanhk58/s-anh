@@ -62,8 +62,14 @@ export default function PagePostTool() {
         return p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
     });
 
-    // Get the FB page token for the selected page
-    const selectedFbPage = fbPages.find(fp => fp.id === selectedPageId);
+    // Get the FB page token for the selected page (match by NAME, not ID — Pancake IDs ≠ FB IDs)
+    const selectedPageName = pagesForShop.find(p => p.id === selectedPageId)?.name || "";
+    const findFbPage = (pageName: string) => {
+        if (!pageName) return undefined;
+        const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+        return fbPages.find(fp => norm(fp.name) === norm(pageName));
+    };
+    const selectedFbPage = findFbPage(selectedPageName);
 
     // Input mode
     const [mode, setMode] = useState<InputMode>("manual");
@@ -196,13 +202,14 @@ export default function PagePostTool() {
 
     // ─── Post to Page ─────────────────────────────────────────────────────────
     const handlePost = async () => {
-        if (!selectedPageId || !selectedFbPage) return;
+        if (!selectedFbPage) return;
         setPostStatus("loading");
         setPostResult("");
 
         try {
             const formData = new FormData();
-            formData.append("pageId", selectedPageId);
+            // Dùng FB page ID thực (không phải Pancake ID)
+            formData.append("pageId", selectedFbPage.id);
             formData.append("pageToken", selectedFbPage.accessToken);
             formData.append("message", message);
 
@@ -246,7 +253,6 @@ export default function PagePostTool() {
         }
     };
 
-    const selectedPageName = pagesForShop.find(p => p.id === selectedPageId)?.name || "";
     const canPost = selectedPageId && selectedFbPage && (message.trim() || media.length > 0);
 
     // ─── Render ───────────────────────────────────────────────────────────────
@@ -352,7 +358,7 @@ export default function PagePostTool() {
                                             <div className="text-center py-3 text-xs text-slate-400">Không tìm thấy page</div>
                                         ) : (
                                             filteredPages.map(p => {
-                                                const hasFbToken = fbPages.some(fp => fp.id === p.id);
+                                                const hasFbToken = !!findFbPage(p.name);
                                                 return (
                                                     <button key={p.id} onClick={() => { setSelectedPageId(p.id); setPageDropdownOpen(false); setPageSearch(""); }}
                                                         className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-left",
