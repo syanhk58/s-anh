@@ -607,7 +607,7 @@ export default function ScriptGeneratorTab() {
             </div>
 
             {/* ═══ ROW 0: CHỌN SHOP + PAGE (giống Gửi tin hàng loạt) ═══ */}
-            <div className="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-sm shadow-sm p-5 mb-4">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/70 backdrop-blur-sm shadow-sm p-5 mb-4 relative z-10">
                 <div className="flex items-center gap-2.5 mb-4">
                     <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 shadow-md flex items-center justify-center">
                         <Send className="h-3.5 w-3.5 text-white" />
