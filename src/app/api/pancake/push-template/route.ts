@@ -33,8 +33,10 @@ export async function GET() {
     try {
         const config = loadConfig();
         const apiUrl = config.poscake.api_url;
+        const jwt = config.pancake_crm.api_token;
+        const crmUrl = config.pancake_crm.api_url;
 
-        // Fetch pages cho mỗi shop từ Pancake API
+        // ══════ STEP 1: Fetch pages từ POS API (qua shop API key) ══════
         const shopsWithPages = await Promise.all(
             config.poscake.shops.map(async (s) => {
                 let pages: Array<{ id: string; name: string; platform: string }> = [];
@@ -70,7 +72,69 @@ export async function GET() {
             })
         );
 
-        return NextResponse.json({ shops: shopsWithPages });
+        // ══════ STEP 2: Fetch TẤT CẢ pages từ CRM API (bao gồm pages mới, admin) ══════
+        // Collect all POS page IDs for dedup
+        const posPageIds = new Set<string>();
+        for (const shop of shopsWithPages) {
+            for (const page of shop.pages) {
+                posPageIds.add(String(page.id));
+            }
+        }
+
+        // Map shop_id → shop index for grouping CRM pages into existing shops
+        const shopIdToIndex = new Map<string, number>();
+        shopsWithPages.forEach((s, i) => shopIdToIndex.set(s.shop_id, i));
+
+        let extraPages: Array<{ id: string; name: string; platform: string }> = [];
+
+        if (jwt) {
+            try {
+                const crmRes = await fetch(
+                    `${crmUrl}/pages?access_token=${jwt}`,
+                    { next: { revalidate: 300 } }
+                );
+                if (crmRes.ok) {
+                    const crmData = await crmRes.json();
+                    // CRM response: { categorized: { activated: [...pages] } }
+                    const activatedPages = crmData?.categorized?.activated || [];
+
+                    for (const p of activatedPages) {
+                        const pageId = String(p.id);
+                        // Skip pages already in POS shops
+                        if (posPageIds.has(pageId)) continue;
+
+                        const pageObj = {
+                            id: pageId,
+                            name: p.name || `Page ${pageId}`,
+                            platform: p.platform || "facebook",
+                        };
+
+                        // Try to group into existing shop by shop_id
+                        const pShopId = p.shop_id ? String(p.shop_id) : null;
+                        if (pShopId && shopIdToIndex.has(pShopId)) {
+                            shopsWithPages[shopIdToIndex.get(pShopId)!].pages.push(pageObj);
+                            posPageIds.add(pageId); // mark as added
+                        } else {
+                            extraPages.push(pageObj);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn("[pancake] Không lấy được pages từ CRM API:", err);
+            }
+        }
+
+        // ══════ STEP 3: Thêm nhóm "Pages khác (CRM)" cho pages không thuộc shop nào ══════
+        const result = [...shopsWithPages];
+        if (extraPages.length > 0) {
+            result.push({
+                name: "Pages khác (CRM)",
+                shop_id: "__crm_extra__",
+                pages: extraPages,
+            });
+        }
+
+        return NextResponse.json({ shops: result });
     } catch (error: unknown) {
         console.error("[pancake/push-template] GET Error:", error);
         return NextResponse.json({ error: "Không đọc được config" }, { status: 500 });

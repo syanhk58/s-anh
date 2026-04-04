@@ -42,13 +42,13 @@ pancake_crm:
 # ─── FACEBOOK GRAPH API (Đăng bài lên Page) ───
 # App: Talpha Post (ID: 1492490978955925)
 # ✅ LONG-LIVED USER TOKEN — 60 ngày (tạo 05/04/2026)
-# Scopes: pages_show_list, pages_read_engagement, pages_manage_posts, pages_manage_engagement, publish_video
-# Pages: auto qua /me/accounts
+# Scopes: pages_show_list, pages_read_engagement, pages_manage_posts, pages_manage_engagement, publish_video, business_management
+# Pages: lấy từ BM + /me/accounts
 facebook_messaging:
   app_id: "1492490978955925"
   app_secret: "d056d01a049989e8cd8fe7f7cfe3178d"
-  user_access_token: "EAAVNaaKhkpUBRCALn7XgGuXUMW5jcCIaQEDz5t6EkCPpbZBVgsN8QJuIamqglWZA7J4C8jRt8Nubtc0xmKfTYChwAEWqiizog7XzbiPVRToMqef6Mgv97xwDDpdJNXRKsIKfADEJuaXwTHAl1UAz9miRYp64GVFrBsN0ZBqoBXxa8mi0UBDQOSRtEuFX5Eq"
-  # page_tokens tự lấy qua /me/accounts — không cần hardcode
+  user_access_token: "EAAVNaaKhkpUBRJT8bm25ZAMhZArO2Ji6BhsJqWbuZC33QecfnYve8JjYdiRYKbObZCfoZA7KtwUU7nyvZAXZBl9b70qRal0mcv9lUkXVt2F0voqBZA7mHrq6n7ajpf6ZBurtZC5XdCFvjCdgPOw91ZBzZBU78w4sLlZBZCupKK2LfYoPdoVofrX4lLGZCTOSUPMoSry"
+  business_manager_id: "2098127827356273"
 
 # ─── BOTCAKE ───
 # Không có API công khai — dùng browser automation hoặc download file

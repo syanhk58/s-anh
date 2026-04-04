@@ -18,6 +18,7 @@ interface Config {
     facebook_messaging: {
         app_id: string;
         user_access_token: string;
+        business_manager_id?: string;
     };
 }
 
@@ -27,69 +28,68 @@ function loadConfig(): Config {
     return yaml.load(raw) as Config;
 }
 
-// ─── GET: Lấy danh sách shops + pages (clone từ pancake/push-template) ────────
+// ─── GET: Lấy danh sách pages từ BM + /me/accounts ───────────────────────────
 export async function GET() {
     try {
         const config = loadConfig();
-        const apiUrl = config.poscake.api_url;
+        const userToken = config.facebook_messaging.user_access_token;
+        const bmId = config.facebook_messaging.business_manager_id;
 
-        // Fetch pages cho mỗi shop từ Pancake POS API — giống hệt script-generator
-        const shopsWithPages = await Promise.all(
-            config.poscake.shops.map(async (s) => {
-                let pages: Array<{ id: string; name: string; platform: string }> = [];
+        // Map to deduplicate pages by ID
+        const pageMap = new Map<string, { id: string; name: string; accessToken: string; picture: string }>();
+
+        // ── 1. Lấy pages từ Business Manager (nếu có BM ID) ──
+        if (bmId) {
+            let bmUrl: string | null = `https://graph.facebook.com/v21.0/${bmId}/owned_pages?fields=id,name,access_token,picture{url}&limit=200&access_token=${userToken}`;
+            while (bmUrl) {
                 try {
-                    const res = await fetch(
-                        `${apiUrl}/shops?api_key=${s.api_key}`,
-                        { next: { revalidate: 300 } }
-                    );
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.shops && Array.isArray(data.shops)) {
-                            for (const shop of data.shops) {
-                                if (shop.pages && Array.isArray(shop.pages)) {
-                                    pages.push(
-                                        ...shop.pages.map((p: { id: string; name: string; platform?: string }) => ({
-                                            id: p.id,
-                                            name: p.name,
-                                            platform: p.platform || "facebook",
-                                        }))
-                                    );
-                                }
-                            }
+                    const res: Response = await fetch(bmUrl);
+                    const data: Record<string, unknown> = await res.json();
+                    if (data.data && Array.isArray(data.data)) {
+                        for (const p of data.data) {
+                            pageMap.set(p.id, {
+                                id: p.id,
+                                name: p.name,
+                                accessToken: p.access_token || "",
+                                picture: p.picture?.data?.url || "",
+                            });
                         }
                     }
+                    bmUrl = (data.paging as Record<string, string>)?.next || null;
                 } catch {
-                    console.warn(`[page-post] Không lấy được pages cho shop ${s.name}`);
+                    console.warn("[page-post] Error fetching BM pages, breaking");
+                    break;
                 }
-                return {
-                    name: s.name,
-                    shop_id: s.shop_id,
-                    pages,
-                };
-            })
-        );
-
-        // Cũng lấy page tokens từ Facebook Graph API (dùng cho đăng bài)
-        let fbPages: Array<{ id: string; name: string; accessToken: string; picture: string }> = [];
-        try {
-            const userToken = config.facebook_messaging.user_access_token;
-            const res = await fetch(
-                `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture{url}&limit=50&access_token=${userToken}`
-            );
-            const data = await res.json();
-            if (data.data && Array.isArray(data.data)) {
-                fbPages = data.data.map((p: { id: string; name: string; access_token: string; picture?: { data?: { url?: string } } }) => ({
-                    id: p.id,
-                    name: p.name,
-                    accessToken: p.access_token,
-                    picture: p.picture?.data?.url || "",
-                }));
             }
-        } catch {
-            console.warn("[page-post] Không lấy được FB pages từ Graph API");
         }
 
-        return NextResponse.json({ shops: shopsWithPages, fbPages });
+        // ── 2. Cũng lấy từ /me/accounts (fallback + merge) ──
+        try {
+            let meUrl: string | null = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token,picture{url}&limit=100&access_token=${userToken}`;
+            while (meUrl) {
+                const res: Response = await fetch(meUrl);
+                const data: Record<string, unknown> = await res.json();
+                if (data.data && Array.isArray(data.data)) {
+                    for (const p of data.data) {
+                        if (!pageMap.has(p.id)) {
+                            pageMap.set(p.id, {
+                                id: p.id,
+                                name: p.name,
+                                accessToken: p.access_token || "",
+                                picture: p.picture?.data?.url || "",
+                            });
+                        }
+                    }
+                }
+                meUrl = (data.paging as Record<string, string>)?.next || null;
+            }
+        } catch {
+            console.warn("[page-post] Không lấy được FB pages từ /me/accounts");
+        }
+
+        const fbPages = Array.from(pageMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+        return NextResponse.json({ fbPages, total: fbPages.length });
     } catch (error: unknown) {
         console.error("[page-post] GET error:", error);
         return NextResponse.json({ error: "Không lấy được danh sách pages" }, { status: 500 });
