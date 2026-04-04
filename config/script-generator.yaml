@@ -41,13 +41,13 @@ pancake_crm:
 
 # ─── FACEBOOK GRAPH API (Đăng bài lên Page) ───
 # App: Talpha Post (ID: 1492490978955925)
-# ✅ LONG-LIVED USER TOKEN — 60 ngày (tạo 04/04/2026)
+# ✅ LONG-LIVED USER TOKEN — 60 ngày (tạo 05/04/2026)
 # Scopes: pages_show_list, pages_read_engagement, pages_manage_posts, pages_manage_engagement, publish_video
 # Pages: auto qua /me/accounts
 facebook_messaging:
   app_id: "1492490978955925"
   app_secret: "d056d01a049989e8cd8fe7f7cfe3178d"
-  user_access_token: "EAAVNaaKhkpUBROId5cWLuDW8ZBXtRRYYSaQxbRQ4EZBx0evJNDC8DZB7ZBXxDJnWN6dJmCGAb2Yvm2gQ8x5UJGwXZC9X4ZBGmZB9qyx9IGMZB4MefZCTVsU9ZCU8GwzilfLodc8IBZBo10H5tYR64RAJCGemKYtCJA53lzhduqqtFiZAOm4ddSZBqja3JMJkj59UI7LW7"
+  user_access_token: "EAAVNaaKhkpUBRCALn7XgGuXUMW5jcCIaQEDz5t6EkCPpbZBVgsN8QJuIamqglWZA7J4C8jRt8Nubtc0xmKfTYChwAEWqiizog7XzbiPVRToMqef6Mgv97xwDDpdJNXRKsIKfADEJuaXwTHAl1UAz9miRYp64GVFrBsN0ZBqoBXxa8mi0UBDQOSRtEuFX5Eq"
   # page_tokens tự lấy qua /me/accounts — không cần hardcode
 
 # ─── BOTCAKE ───
