@@ -5,13 +5,15 @@ import Sidebar, { ModuleId } from "@/components/sidebar";
 import SpyBoard from "@/components/spy-board";
 import ScriptGenerator from "@/components/script-generator";
 import FacebookToolPage from "@/components/facebook-tool-page";
+import PagePostTool from "@/components/page-post-tool";
 
 function ModuleContent({ moduleId }: { moduleId: ModuleId }) {
   switch (moduleId) {
-    case "tim-sp-spy":   return <SpyBoard />;
-    case "tao-kich-ban": return <ScriptGenerator />;
-    case "tool-page":    return <FacebookToolPage />;
-    default:             return null;
+    case "tim-sp-spy":     return <SpyBoard />;
+    case "tao-kich-ban":   return <ScriptGenerator />;
+    case "dang-bai-page":  return <PagePostTool />;
+    case "tool-page":      return <FacebookToolPage />;
+    default:               return null;
   }
 }
 

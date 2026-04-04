@@ -1,9 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Search, FileText, Home, Wrench } from "lucide-react";
+import { Search, FileText, Home, Wrench, Megaphone } from "lucide-react";
 
-export type ModuleId = "tim-sp-spy" | "tao-kich-ban" | "tool-page";
+export type ModuleId = "tim-sp-spy" | "tao-kich-ban" | "dang-bai-page" | "tool-page";
 
 export interface NavItem {
   id: ModuleId;
@@ -12,9 +12,10 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: "tim-sp-spy",   label: "Tìm SP Spy",    icon: Search },
-  { id: "tao-kich-ban", label: "Tạo kịch bản",  icon: FileText },
-  { id: "tool-page",    label: "Tool Page",      icon: Wrench },
+  { id: "tim-sp-spy",    label: "Tìm SP Spy",      icon: Search },
+  { id: "tao-kich-ban",  label: "Tạo kịch bản",    icon: FileText },
+  { id: "dang-bai-page", label: "Đăng bài Page",   icon: Megaphone },
+  { id: "tool-page",     label: "Tool Page",        icon: Wrench },
 ];
 
 interface SidebarProps {
