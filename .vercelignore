@@ -1,0 +1,4 @@
+tmp-leader/
+node_modules/
+.next/
+.DS_Store

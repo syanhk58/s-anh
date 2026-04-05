@@ -11,3 +11,4 @@ config/bigquery-key.json
 
 # Spy runtime data (server-side only)
 spy-data/
+tmp-leader/
