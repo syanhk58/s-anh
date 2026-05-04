@@ -131,6 +131,9 @@ function PostTab() {
   const [collections, setCollections] = useState<GroupCollection[]>([]);
   const [showCollections, setShowCollections] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
+  const [autoPosting, setAutoPosting] = useState(false);
+  const [autoPostLog, setAutoPostLog] = useState<Array<{type: string; message: string; timestamp: string}>>([]);
+  const [autoPostAbort, setAutoPostAbort] = useState<AbortController | null>(null);
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -318,6 +321,77 @@ function PostTab() {
   const exportGroupList = () => {
     const text = filteredGroups.map(g => `${g.name} | ${g.url}`).join("\n");
     navigator.clipboard.writeText(text);
+  };
+
+  // ─── Auto Post Logic ──────────────────────────────────────────────────
+  const startAutoPost = async () => {
+    if (!content.trim() || pendingGroups.length === 0) return;
+    const controller = new AbortController();
+    setAutoPostAbort(controller);
+    setAutoPosting(true);
+    setAutoPostLog([]);
+    const postData = {
+      content: getPostContent(),
+      groups: pendingGroups.map(g => ({ name: g.name, url: g.url })),
+      delay,
+      variations: variations.length > 0 ? variations : [],
+    };
+    const pendingIds = pendingGroups.map(g => g.id);
+    try {
+      const res = await fetch('/api/facebook/auto-post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postData),
+        signal: controller.signal,
+      });
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const timestamp = new Date().toLocaleTimeString('vi-VN');
+              setAutoPostLog(prev => [...prev, { ...data, timestamp }]);
+              if (data.type === 'group_done' && pendingIds[data.index]) {
+                const gId = pendingIds[data.index];
+                setGroups(prev => prev.map(g => g.id === gId ? { ...g, status: 'done' as const } : g));
+                addQuota(1);
+              } else if (data.type === 'group_error' && pendingIds[data.index]) {
+                const gId = pendingIds[data.index];
+                setGroups(prev => prev.map(g => g.id === gId ? { ...g, status: 'skipped' as const } : g));
+              } else if (data.type === 'complete' || data.type === 'error') {
+                setAutoPosting(false);
+                setQuota(getTodayQuota());
+              }
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== 'AbortError') {
+        const timestamp = new Date().toLocaleTimeString('vi-VN');
+        setAutoPostLog(prev => [...prev, { type: 'error', message: `❌ Lỗi kết nối: ${err.message}`, timestamp }]);
+      }
+    }
+    setAutoPosting(false);
+    setAutoPostAbort(null);
+  };
+
+  const stopAutoPost = () => {
+    if (autoPostAbort) {
+      autoPostAbort.abort();
+      setAutoPostAbort(null);
+    }
+    setAutoPosting(false);
+    const timestamp = new Date().toLocaleTimeString('vi-VN');
+    setAutoPostLog(prev => [...prev, { type: 'cancelled', message: '⛔ Đã dừng tự động đăng bài.', timestamp }]);
   };
 
   const postContent = getPostContent();
@@ -755,11 +829,25 @@ function PostTab() {
               <div className="text-[11px] text-slate-400 truncate mt-0.5">{currentGroup.url}</div>
             </div>
             <div className="flex gap-2">
-              <button onClick={openNextGroup} disabled={!content.trim()}
-                className={cn("flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
-                  content.trim() ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:shadow-lg" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
-                <Play className="w-4 h-4" /> Mở nhóm & Copy nội dung
-              </button>
+              {!autoPosting ? (
+                <>
+                  <button onClick={openNextGroup} disabled={!content.trim() || autoPosting}
+                    className={cn("flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+                      content.trim() && !autoPosting ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md hover:shadow-lg" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
+                    <Play className="w-4 h-4" /> Mở nhóm & Copy nội dung
+                  </button>
+                  <button onClick={startAutoPost} disabled={!content.trim() || pendingGroups.length === 0}
+                    className={cn("flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all",
+                      content.trim() && pendingGroups.length > 0 ? "bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-md shadow-violet-200/50 hover:shadow-violet-300/60" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
+                    <Sparkles className="w-4 h-4" /> 🤖 Auto đăng
+                  </button>
+                </>
+              ) : (
+                <button onClick={stopAutoPost}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-md hover:shadow-lg transition-all animate-pulse">
+                  <X className="w-4 h-4" /> ⛔ Dừng tự động đăng
+                </button>
+              )}
             </div>
             {sessionActive && (
               <div className="flex gap-2">
@@ -784,6 +872,44 @@ function PostTab() {
         ) : (
           <div className="text-center py-4 text-slate-300 text-xs">Thêm nhóm ở phần ② để bắt đầu</div>
         )}
+
+        {/* ═══ AUTO POST LOG ═══ */}
+        {(autoPosting || autoPostLog.length > 0) && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5 text-violet-500" />
+                <span className="text-xs font-bold text-violet-600">Log tự động đăng bài</span>
+                {autoPosting && <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-600 font-bold animate-pulse">Đang chạy...</span>}
+              </div>
+              {autoPostLog.length > 0 && !autoPosting && (
+                <button onClick={() => setAutoPostLog([])} className="text-[10px] text-slate-400 hover:text-red-500 font-semibold">Xóa log</button>
+              )}
+            </div>
+            <div className="max-h-56 overflow-y-auto rounded-xl bg-slate-900 p-3 space-y-1 font-mono text-[11px] scroll-smooth">
+              {autoPostLog.map((log, i) => (
+                <div key={i} className={cn("flex items-start gap-2", {
+                  "text-emerald-400": log.type === "group_done",
+                  "text-red-400": log.type === "group_error" || log.type === "error",
+                  "text-amber-400": log.type === "delay" || log.type === "waiting_login",
+                  "text-blue-400": log.type === "posting" || log.type === "step",
+                  "text-violet-400": log.type === "status" || log.type === "login_required",
+                  "text-slate-500": log.type === "cancelled",
+                  "text-cyan-400": log.type === "complete",
+                })}>
+                  <span className="text-slate-600 shrink-0">{log.timestamp}</span>
+                  <span>{log.message}</span>
+                </div>
+              ))}
+              {autoPosting && (
+                <div className="flex items-center gap-1.5 text-violet-400 animate-pulse mt-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  <span>Đang xử lý...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -796,10 +922,24 @@ function ScrapeTab() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState("");
 
+  // Auto scrape state
+  type ScrapeMode = "auto" | "manual";
+  const [mode, setMode] = useState<ScrapeMode>("auto");
+  const [scrapeGroups, setScrapeGroups] = useState<Array<{ id: string; name: string; url: string }>>([]);
+  const [newScrapeUrl, setNewScrapeUrl] = useState("");
+  const [maxPosts, setMaxPosts] = useState(20);
+  const [keywordsInput, setKeywordsInput] = useState("");
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapeLog, setScrapeLog] = useState<Array<{ type: string; message: string; timestamp: string }>>([]);
+  const [scrapeAbort, setScrapeAbort] = useState<AbortController | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("Tất cả");
+
   // Load/save leads from localStorage
   useEffect(() => { setLeads(loadLS<Lead[]>(LS_LEADS, [])); }, []);
   useEffect(() => { saveLS(LS_LEADS, leads); }, [leads]);
 
+  // Manual paste analysis
   const analyzeText = async () => {
     if (!rawText.trim()) return;
     setIsAnalyzing(true);
@@ -823,6 +963,104 @@ function ScrapeTab() {
     setIsAnalyzing(false);
   };
 
+  // Auto scrape helpers
+  const extractGroupName = (url: string, idx: number): string => {
+    try {
+      const u = new URL(url.startsWith("http") ? url : `https://${url}`);
+      const parts = u.pathname.split("/").filter(Boolean);
+      const gi = parts.indexOf("groups");
+      if (gi !== -1 && parts[gi + 1]) {
+        const raw = parts[gi + 1].replace(/-/g, " ").replace(/\d{10,}/g, "").trim();
+        if (raw) return raw;
+      }
+    } catch { /* */ }
+    return `Nhóm ${idx + 1}`;
+  };
+
+  const addScrapeGroup = () => {
+    if (!newScrapeUrl.trim()) return;
+    const url = newScrapeUrl.trim();
+    const name = extractGroupName(url, scrapeGroups.length);
+    setScrapeGroups(prev => [...prev, { id: `sg-${Date.now()}`, name, url }]);
+    setNewScrapeUrl("");
+  };
+
+  const removeScrapeGroup = (id: string) => setScrapeGroups(prev => prev.filter(g => g.id !== id));
+
+  // Start auto scrape
+  const startAutoScrape = async () => {
+    if (scrapeGroups.length === 0) return;
+    const controller = new AbortController();
+    setScrapeAbort(controller);
+    setIsScraping(true);
+    setScrapeLog([]);
+
+    const keywords = keywordsInput.split(",").map(k => k.trim()).filter(k => k.length > 0);
+
+    try {
+      const res = await fetch("/api/facebook/auto-scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          groups: scrapeGroups.map(g => ({ name: g.name, url: g.url })),
+          maxPosts,
+          keywords,
+        }),
+        signal: controller.signal,
+      });
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const timestamp = new Date().toLocaleTimeString("vi-VN");
+              setScrapeLog(prev => [...prev, { ...data, timestamp }]);
+
+              // Handle leads_found events — add leads incrementally
+              if (data.type === "leads_found" && data.newLeads) {
+                const newLeads = data.newLeads.map((l: Omit<Lead, "id">) => ({
+                  ...l,
+                  id: `lead-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                }));
+                setLeads(prev => [...prev, ...newLeads]);
+              }
+
+              if (data.type === "complete" || data.type === "error") {
+                setIsScraping(false);
+              }
+            } catch { /* ignore */ }
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name !== "AbortError") {
+        const timestamp = new Date().toLocaleTimeString("vi-VN");
+        setScrapeLog(prev => [...prev, { type: "error", message: `❌ Lỗi: ${err.message}`, timestamp }]);
+      }
+    }
+    setIsScraping(false);
+    setScrapeAbort(null);
+  };
+
+  const stopAutoScrape = () => {
+    if (scrapeAbort) { scrapeAbort.abort(); setScrapeAbort(null); }
+    setIsScraping(false);
+    const timestamp = new Date().toLocaleTimeString("vi-VN");
+    setScrapeLog(prev => [...prev, { type: "cancelled", message: "⛔ Đã dừng cào thông tin.", timestamp }]);
+  };
+
+  // Lead helpers
   const removeLead = (id: string) => setLeads(prev => prev.filter(l => l.id !== id));
   const clearAllLeads = () => setLeads([]);
   const toggleContacted = (id: string) => setLeads(prev => prev.map(l => l.id === id ? { ...l, contacted: !l.contacted } : l));
@@ -830,7 +1068,7 @@ function ScrapeTab() {
   const exportCSV = () => {
     const rows = [
       ["Tên", "Nhu cầu", "Liên hệ", "Phân loại", "Độ tin cậy", "Đã liên hệ"].join(","),
-      ...leads.map(l => [l.name, l.need, l.contact, l.category, l.confidence, l.contacted ? "Có" : "Chưa"].map(v => `"${v}"`).join(","))
+      ...filteredLeads.map(l => [l.name, l.need, l.contact, l.category, l.confidence, l.contacted ? "Có" : "Chưa"].map(v => `"${v}"`).join(","))
     ].join("\n");
     const blob = new Blob(["\uFEFF" + rows], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -844,70 +1082,233 @@ function ScrapeTab() {
     low: "bg-slate-50 text-slate-500 border-slate-200",
   }[c] || "bg-slate-50 text-slate-500 border-slate-200");
 
+  // Filter & search leads
+  const allCategories = ["Tất cả", ...Array.from(new Set(leads.map(l => l.category).filter(Boolean)))];
+  const filteredLeads = leads.filter(l => {
+    const matchCategory = filterCategory === "Tất cả" || l.category === filterCategory;
+    const matchSearch = !searchQuery || [l.name, l.need, l.contact, l.category].some(f => f?.toLowerCase().includes(searchQuery.toLowerCase()));
+    return matchCategory && matchSearch;
+  });
+
   return (
     <div className="space-y-5">
-      {/* Input */}
+      {/* ═══ ROW 1: NGUỒN DỮ LIỆU ═══ */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-            <Search className="w-3.5 h-3.5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-sm font-bold text-slate-700">Paste nội dung từ nhóm Facebook</h3>
-            <p className="text-[11px] text-slate-400">Sao chép bình luận / bài đăng từ nhóm → paste vào đây → AI tự tìm khách hàng tiềm năng</p>
-          </div>
-        </div>
-        <textarea
-          rows={7}
-          value={rawText}
-          onChange={e => setRawText(e.target.value)}
-          placeholder={`Ví dụ:\n"Chào mọi người, mình đang cần tìm người thiết kế website cho shop thời trang, ai có thể liên hệ qua đây cho mình nhé 0987654321"\n\n"Cho hỏi group có ai chuyên làm marketing online không, cần tư vấn gấp. Inbox mình tại: fb.com/xyz"
-
-→ Có thể paste nhiều comment cùng lúc, AI sẽ phân tích từng người.`}
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 resize-none"
-        />
-        {error && (
-          <div className="mt-2 flex items-center gap-2 text-red-500 text-xs">
-            <AlertCircle className="w-3.5 h-3.5" /> {error}
-          </div>
-        )}
-        <div className="flex items-center justify-between mt-3">
-          <span className="text-[11px] text-slate-400">{rawText.length} ký tự</span>
-          <button
-            onClick={analyzeText}
-            disabled={!rawText.trim() || isAnalyzing}
-            className={cn(
-              "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all",
-              rawText.trim() && !isAnalyzing
-                ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md hover:shadow-lg"
-                : "bg-slate-100 text-slate-300 cursor-not-allowed"
-            )}
-          >
-            {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {isAnalyzing ? "Đang phân tích..." : "Trích xuất khách hàng"}
+        {/* Mode switcher */}
+        <div className="flex items-center gap-2 mb-4">
+          <button onClick={() => setMode("auto")}
+            className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              mode === "auto" ? "bg-gradient-to-r from-cyan-50 to-blue-50 text-cyan-700 border-cyan-300 shadow-sm" : "bg-slate-50 text-slate-500 border-slate-200 hover:border-cyan-300")}>
+            <Sparkles className="w-3.5 h-3.5" /> 🤖 Auto Scrape
+          </button>
+          <button onClick={() => setMode("manual")}
+            className={cn("flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border",
+              mode === "manual" ? "bg-gradient-to-r from-cyan-50 to-blue-50 text-cyan-700 border-cyan-300 shadow-sm" : "bg-slate-50 text-slate-500 border-slate-200 hover:border-cyan-300")}>
+            <FileText className="w-3.5 h-3.5" /> 📋 Paste thủ công
           </button>
         </div>
+
+        <AnimatePresence mode="wait">
+          {mode === "auto" ? (
+            <motion.div key="auto" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.12 }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                  <Globe className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-700">① Nhóm Facebook cần cào</h3>
+                  <p className="text-[11px] text-slate-400">Puppeteer tự vào nhóm → scroll → cào bài + bình luận → AI phân tích</p>
+                </div>
+              </div>
+
+              {/* Group list */}
+              {scrapeGroups.length > 0 && (
+                <div className="space-y-1.5 mb-3 max-h-32 overflow-y-auto">
+                  {scrapeGroups.map((g, idx) => (
+                    <div key={g.id} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] text-slate-300 font-mono w-4 text-right">{idx + 1}</span>
+                      <div className="w-2 h-2 rounded-full bg-cyan-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-semibold text-slate-700 truncate block">{g.name}</span>
+                        <span className="text-[10px] text-slate-400 truncate block">{g.url}</span>
+                      </div>
+                      <button onClick={() => removeScrapeGroup(g.id)} className="text-slate-300 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add group input */}
+              <div className="flex gap-2 mb-4">
+                <input value={newScrapeUrl} onChange={e => setNewScrapeUrl(e.target.value)}
+                  placeholder="Dán link nhóm Facebook (VD: https://facebook.com/groups/...)"
+                  className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400/30"
+                  onKeyDown={e => e.key === "Enter" && addScrapeGroup()} />
+                <button onClick={addScrapeGroup} className="p-2 rounded-lg bg-cyan-600 text-white hover:bg-cyan-700 transition-colors">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Settings row */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                    <FileText className="w-3 h-3" /> Số bài/nhóm
+                  </label>
+                  <select value={maxPosts} onChange={e => setMaxPosts(Number(e.target.value))}
+                    className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 focus:outline-none">
+                    <option value={10}>10 bài</option>
+                    <option value={20}>20 bài</option>
+                    <option value={30}>30 bài</option>
+                    <option value={50}>50 bài</option>
+                  </select>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-1.5">
+                    <Filter className="w-3 h-3" /> Keywords lọc
+                  </label>
+                  <input value={keywordsInput} onChange={e => setKeywordsInput(e.target.value)}
+                    placeholder="cần, tìm, mua, tư vấn..."
+                    className="w-full text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-400/30" />
+                  <p className="text-[9px] text-slate-400 mt-1">Phân cách bằng dấu phẩy. Để trống = cào tất cả</p>
+                </div>
+              </div>
+
+              {/* Start/Stop buttons */}
+              <div className="flex gap-2">
+                {!isScraping ? (
+                  <button onClick={startAutoScrape} disabled={scrapeGroups.length === 0}
+                    className={cn("flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold transition-all",
+                      scrapeGroups.length > 0 ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md hover:shadow-lg" : "bg-slate-100 text-slate-300 cursor-not-allowed")}>
+                    <Sparkles className="w-4 h-4" /> 🚀 Bắt đầu cào {scrapeGroups.length} nhóm
+                  </button>
+                ) : (
+                  <button onClick={stopAutoScrape}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-red-500 to-rose-600 text-white shadow-md hover:shadow-lg transition-all animate-pulse">
+                    <X className="w-4 h-4" /> ⛔ Dừng cào
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key="manual" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.12 }}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
+                  <Search className="w-3.5 h-3.5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-700">Paste nội dung từ nhóm Facebook</h3>
+                  <p className="text-[11px] text-slate-400">Sao chép bình luận / bài đăng → paste vào đây → AI tự tìm khách hàng tiềm năng</p>
+                </div>
+              </div>
+              <textarea
+                rows={6}
+                value={rawText}
+                onChange={e => setRawText(e.target.value)}
+                placeholder={`Ví dụ:\n"Mình đang cần tìm người thiết kế website, ai có thể liên hệ 0987654321"\n\n→ Paste nhiều comment cùng lúc, AI sẽ phân tích từng người.`}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-cyan-400/30 resize-none"
+              />
+              {error && (
+                <div className="mt-2 flex items-center gap-2 text-red-500 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5" /> {error}
+                </div>
+              )}
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-[11px] text-slate-400">{rawText.length} ký tự</span>
+                <button
+                  onClick={analyzeText}
+                  disabled={!rawText.trim() || isAnalyzing}
+                  className={cn(
+                    "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all",
+                    rawText.trim() && !isAnalyzing
+                      ? "bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-md hover:shadow-lg"
+                      : "bg-slate-100 text-slate-300 cursor-not-allowed"
+                  )}
+                >
+                  {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {isAnalyzing ? "Đang phân tích..." : "Trích xuất khách hàng"}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Leads table */}
+      {/* ═══ SCRAPE LOG ═══ */}
+      {(isScraping || scrapeLog.length > 0) && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                <Sparkles className="w-3.5 h-3.5 text-white" />
+              </div>
+              <span className="text-sm font-bold text-slate-700">② Log cào thông tin</span>
+              {isScraping && <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-100 text-cyan-600 font-bold animate-pulse">Đang chạy...</span>}
+            </div>
+            {scrapeLog.length > 0 && !isScraping && (
+              <button onClick={() => setScrapeLog([])} className="text-[10px] text-slate-400 hover:text-red-500 font-semibold">Xóa log</button>
+            )}
+          </div>
+          <div className="max-h-56 overflow-y-auto rounded-xl bg-slate-900 p-3 space-y-1 font-mono text-[11px]">
+            {scrapeLog.map((log, i) => (
+              <div key={i} className={cn("flex items-start gap-2", {
+                "text-emerald-400": log.type === "group_done" || log.type === "leads_found",
+                "text-red-400": log.type === "group_error" || log.type === "error",
+                "text-amber-400": log.type === "delay" || log.type === "waiting_login",
+                "text-blue-400": log.type === "scraping" || log.type === "step",
+                "text-violet-400": log.type === "status" || log.type === "login_required",
+                "text-slate-500": log.type === "cancelled",
+                "text-cyan-400": log.type === "complete",
+              })}>
+                <span className="text-slate-600 shrink-0">{log.timestamp}</span>
+                <span>{log.message}</span>
+              </div>
+            ))}
+            {isScraping && (
+              <div className="flex items-center gap-1.5 text-cyan-400 animate-pulse mt-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                <span>Đang xử lý...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ LEADS TABLE ═══ */}
       {leads.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-cyan-500" />
-                <span className="text-sm font-bold text-slate-700">{leads.length} leads</span>
+          <div className="px-5 py-3 border-b border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-cyan-500" />
+                  <span className="text-sm font-bold text-slate-700">{leads.length} leads</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-bold">{leads.filter(l => l.contacted).length} đã liên hệ</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-bold">{leads.filter(l => !l.contacted).length} chưa liên hệ</span>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-bold">{leads.filter(l => l.contacted).length} đã liên hệ</span>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 font-bold">{leads.filter(l => !l.contacted).length} chưa liên hệ</span>
+              <div className="flex items-center gap-2">
+                <button onClick={clearAllLeads} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
+                  <Trash2 className="w-3 h-3" /> Xóa hết
+                </button>
+                <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 text-xs font-semibold hover:bg-emerald-100 transition-all">
+                  <Download className="w-3.5 h-3.5" /> Export CSV
+                </button>
+              </div>
             </div>
+            {/* Search & Filter */}
             <div className="flex items-center gap-2">
-              <button onClick={clearAllLeads} className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all">
-                <Trash2 className="w-3 h-3" /> Xóa hết
-              </button>
-              <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 text-xs font-semibold hover:bg-emerald-100 transition-all">
-                <Download className="w-3.5 h-3.5" /> Export CSV
-              </button>
+              <div className="flex-1 relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-300" />
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Tìm theo tên, nhu cầu, liên hệ..."
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400/30" />
+              </div>
+              <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
+                className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white focus:outline-none">
+                {allCategories.map(c => <option key={c}>{c}</option>)}
+              </select>
+              <span className="text-[10px] text-slate-400 shrink-0">{filteredLeads.length} hiển thị</span>
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -924,7 +1325,7 @@ function ScrapeTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {leads.map(lead => (
+                {filteredLeads.map(lead => (
                   <tr key={lead.id} className={cn("hover:bg-slate-50/60 transition-colors group", lead.contacted && "bg-emerald-50/30")}>
                     <td className="px-4 py-3">
                       <span className="font-semibold text-slate-800 text-xs">{lead.name || "—"}</span>
@@ -973,6 +1374,8 @@ function ScrapeTab() {
     </div>
   );
 }
+
+
 
 // ─── Tab 3: Phân loại khách hàng ──────────────────────────────────────────────
 function ClassifyTab() {
@@ -1136,6 +1539,7 @@ function ClassifyTab() {
     </div>
   );
 }
+
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const TABS = [

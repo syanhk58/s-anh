@@ -12,3 +12,10 @@ config/bigquery-key.json
 # Spy runtime data (server-side only)
 spy-data/
 tmp-leader/
+
+# Puppeteer Chrome session data
+.chrome-data/
+
+# Video pipeline
+.video-tmp/
+public/generated-videos/

@@ -6,6 +6,8 @@ import SpyBoard from "@/components/spy-board";
 import ScriptGenerator from "@/components/script-generator";
 import FacebookToolPage from "@/components/facebook-tool-page";
 import PagePostTool from "@/components/page-post-tool";
+import VideoCreator from "@/components/video-creator";
+import VideoRemixer from "@/components/video-remixer";
 
 function ModuleContent({ moduleId }: { moduleId: ModuleId }) {
   switch (moduleId) {
@@ -13,6 +15,8 @@ function ModuleContent({ moduleId }: { moduleId: ModuleId }) {
     case "tao-kich-ban":   return <ScriptGenerator />;
     case "dang-bai-page":  return <PagePostTool />;
     case "tool-page":      return <FacebookToolPage />;
+    case "tao-video":      return <VideoCreator />;
+    case "xoa-logo":       return <VideoRemixer />;
     default:               return null;
   }
 }
