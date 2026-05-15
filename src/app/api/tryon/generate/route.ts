@@ -1,151 +1,263 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const maxDuration = 120; // 2 minutes for AI processing
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/tryon/generate
- * 
- * Virtual Try-On using HuggingFace Spaces Gradio API.
- * Model: Kwai-Kolors/Kolors-Virtual-Try-On (or fallback)
- * 
- * Body: { personImage: string (base64), garmentImage: string (base64) }
- * Returns: { resultImage: string (base64), success: boolean }
+ * Virtual Try-On using HuggingFace Spaces Gradio API (v4+ format)
  */
 
-const TRYON_SPACES = [
-  "Kwai-Kolors/Kolors-Virtual-Try-On",
-  "yisol/IDM-VTON",
+const SPACES = [
+  {
+    id: "Kwai-Kolors/Kolors-Virtual-Try-On",
+    url: "https://kwai-kolors-kolors-virtual-try-on.hf.space",
+    apiName: "tryon",
+  },
+  {
+    id: "yisol/IDM-VTON",
+    url: "https://yisol-idm-vton.hf.space",
+    apiName: "tryon",
+  },
 ];
 
-async function callGradioSpace(
-  spaceId: string,
-  personBlob: Blob,
-  garmentBlob: Blob
+async function trySpace(
+  space: typeof SPACES[0],
+  personBase64: string,
+  garmentBase64: string
 ): Promise<string | null> {
+  const baseUrl = space.url;
+
+  // --- Attempt 1: Gradio 4+ /call/ API ---
   try {
-    // Step 1: Get Space info and session
-    const infoRes = await fetch(`https://${spaceId.replace("/", "-").toLowerCase()}.hf.space/info`, {
-      headers: { "Content-Type": "application/json" },
-    });
+    console.log(`[TryOn] Trying ${space.id} via /call/ API...`);
 
-    if (!infoRes.ok) {
-      // Try alternate URL format
-      const altInfoRes = await fetch(`https://huggingface.co/api/spaces/${spaceId}`);
-      if (!altInfoRes.ok) throw new Error(`Space ${spaceId} not accessible`);
-    }
-
-    // Step 2: Upload files to the Space
-    const baseUrl = `https://${spaceId.replace("/", "-").toLowerCase()}.hf.space`;
-
-    // Upload person image
-    const personForm = new FormData();
-    personForm.append("files", personBlob, "person.png");
-    const personUpRes = await fetch(`${baseUrl}/upload`, {
-      method: "POST",
-      body: personForm,
-    });
-    if (!personUpRes.ok) throw new Error("Failed to upload person image");
-    const personFiles = await personUpRes.json();
-    const personPath = Array.isArray(personFiles) ? personFiles[0] : personFiles;
-
-    // Upload garment image
-    const garmentForm = new FormData();
-    garmentForm.append("files", garmentBlob, "garment.png");
-    const garmentUpRes = await fetch(`${baseUrl}/upload`, {
-      method: "POST",
-      body: garmentForm,
-    });
-    if (!garmentUpRes.ok) throw new Error("Failed to upload garment image");
-    const garmentFiles = await garmentUpRes.json();
-    const garmentPath = Array.isArray(garmentFiles) ? garmentFiles[0] : garmentFiles;
-
-    // Step 3: Call prediction API
-    const predictPayload = {
-      data: [
-        { path: personPath, meta: { _type: "gradio.FileData" } },
-        { path: garmentPath, meta: { _type: "gradio.FileData" } },
-      ],
-      fn_index: 0,
-      session_hash: `session_${Date.now()}`,
-    };
-
-    // Try queue-based API first
-    const queueRes = await fetch(`${baseUrl}/queue/push`, {
+    // Step 1: Submit job
+    const submitRes = await fetch(`${baseUrl}/call/${space.apiName}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(predictPayload),
+      body: JSON.stringify({
+        data: [
+          { path: personBase64, meta: { _type: "gradio.FileData" } },
+          { path: garmentBase64, meta: { _type: "gradio.FileData" } },
+        ],
+      }),
     });
 
-    if (queueRes.ok) {
-      const queueData = await queueRes.json();
-      const eventId = queueData.event_id || queueData.hash;
-
-      // Poll for result
-      const maxWait = 90_000; // 90 seconds
-      const startTime = Date.now();
-
-      while (Date.now() - startTime < maxWait) {
-        await new Promise(r => setTimeout(r, 3000));
-
-        try {
-          const statusRes = await fetch(`${baseUrl}/queue/status/${eventId}`);
-          if (statusRes.ok) {
-            const status = await statusRes.json();
-            if (status.status === "COMPLETE" && status.data?.data) {
-              const resultData = status.data.data[0];
-              const resultUrl = typeof resultData === "string"
-                ? resultData
-                : resultData?.url || resultData?.path;
-
-              if (resultUrl) {
-                // Download result image
-                const fullUrl = resultUrl.startsWith("http") ? resultUrl : `${baseUrl}/file=${resultUrl}`;
-                const imgRes = await fetch(fullUrl);
-                if (imgRes.ok) {
-                  const buffer = Buffer.from(await imgRes.arrayBuffer());
-                  return `data:image/png;base64,${buffer.toString("base64")}`;
-                }
-              }
-            }
-            if (status.status === "FAILED") throw new Error("Generation failed");
-          }
-        } catch {
-          // Continue polling
-        }
+    if (submitRes.ok) {
+      const { event_id } = await submitRes.json();
+      if (event_id) {
+        // Step 2: Poll SSE for result
+        const result = await pollResult(`${baseUrl}/call/${space.apiName}/${event_id}`);
+        if (result) return result;
       }
-      throw new Error("Timeout waiting for result");
+    }
+  } catch (e) {
+    console.log(`[TryOn] /call/ API failed for ${space.id}:`, e);
+  }
+
+  // --- Attempt 2: Gradio /api/predict ---
+  try {
+    console.log(`[TryOn] Trying ${space.id} via /api/predict...`);
+
+    // Upload files first
+    const personPath = await uploadFile(baseUrl, personBase64, "person.png");
+    const garmentPath = await uploadFile(baseUrl, garmentBase64, "garment.png");
+
+    if (!personPath || !garmentPath) {
+      console.log(`[TryOn] Upload failed for ${space.id}`);
+      return null;
     }
 
-    // Fallback: direct predict API
     const predictRes = await fetch(`${baseUrl}/api/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(predictPayload),
+      body: JSON.stringify({
+        data: [
+          { path: personPath, meta: { _type: "gradio.FileData" } },
+          { path: garmentPath, meta: { _type: "gradio.FileData" } },
+        ],
+        fn_index: 0,
+        session_hash: `s_${Date.now()}`,
+      }),
     });
 
     if (predictRes.ok) {
       const result = await predictRes.json();
-      const resultData = result.data?.[0];
-      const resultUrl = typeof resultData === "string"
-        ? resultData
-        : resultData?.url || resultData?.path;
+      return extractImageFromResult(baseUrl, result);
+    }
+  } catch (e) {
+    console.log(`[TryOn] /api/predict failed for ${space.id}:`, e);
+  }
 
-      if (resultUrl) {
-        const fullUrl = resultUrl.startsWith("http") ? resultUrl : `${baseUrl}/file=${resultUrl}`;
-        const imgRes = await fetch(fullUrl);
-        if (imgRes.ok) {
-          const buffer = Buffer.from(await imgRes.arrayBuffer());
-          return `data:image/png;base64,${buffer.toString("base64")}`;
+  // --- Attempt 3: Queue-based API ---
+  try {
+    console.log(`[TryOn] Trying ${space.id} via /queue/join...`);
+
+    const personPath = await uploadFile(baseUrl, personBase64, "person.png");
+    const garmentPath = await uploadFile(baseUrl, garmentBase64, "garment.png");
+
+    if (!personPath || !garmentPath) return null;
+
+    const sessionHash = `s_${Date.now()}`;
+
+    const joinRes = await fetch(`${baseUrl}/queue/join`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: [
+          { path: personPath, meta: { _type: "gradio.FileData" } },
+          { path: garmentPath, meta: { _type: "gradio.FileData" } },
+        ],
+        fn_index: 0,
+        session_hash: sessionHash,
+      }),
+    });
+
+    if (joinRes.ok) {
+      // Poll queue/data for result
+      const maxWait = 90_000;
+      const start = Date.now();
+
+      while (Date.now() - start < maxWait) {
+        await sleep(3000);
+
+        const dataRes = await fetch(`${baseUrl}/queue/data?session_hash=${sessionHash}`, {
+          headers: { Accept: "text/event-stream" },
+        });
+
+        if (dataRes.ok) {
+          const text = await dataRes.text();
+          // Parse SSE events
+          const lines = text.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const evt = JSON.parse(line.slice(6));
+                if (evt.msg === "process_completed" && evt.output?.data) {
+                  return extractImageFromResult(baseUrl, evt.output);
+                }
+              } catch { /* continue */ }
+            }
+          }
         }
       }
     }
+  } catch (e) {
+    console.log(`[TryOn] /queue/join failed for ${space.id}:`, e);
+  }
 
+  return null;
+}
+
+async function uploadFile(baseUrl: string, base64Data: string, filename: string): Promise<string | null> {
+  try {
+    // Convert base64 to buffer
+    const raw = base64Data.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(raw, "base64");
+    const blob = new Blob([buffer], { type: "image/png" });
+
+    const form = new FormData();
+    form.append("files", blob, filename);
+
+    const res = await fetch(`${baseUrl}/upload`, {
+      method: "POST",
+      body: form,
+    });
+
+    if (!res.ok) return null;
+
+    const files = await res.json();
+    // Response can be string[] or string
+    if (Array.isArray(files)) return files[0];
+    if (typeof files === "string") return files;
     return null;
-  } catch (err) {
-    console.error(`Gradio Space ${spaceId} error:`, err);
+  } catch {
     return null;
   }
+}
+
+async function pollResult(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { Accept: "text/event-stream" },
+    });
+
+    if (!res.ok) return null;
+
+    const text = await res.text();
+    const lines = text.split("\n");
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          // Result data is usually in data array
+          if (Array.isArray(data) && data.length > 0) {
+            const item = data[0];
+            if (typeof item === "string" && item.startsWith("http")) {
+              return await downloadAsBase64(item);
+            }
+            if (item?.url) {
+              return await downloadAsBase64(item.url);
+            }
+          }
+        } catch { /* continue */ }
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function extractImageFromResult(baseUrl: string, result: Record<string, unknown>): string | null {
+  try {
+    const data = (result as { data?: unknown[] }).data;
+    if (!data || !Array.isArray(data) || data.length === 0) return null;
+
+    const item = data[0];
+    if (!item) return null;
+
+    // Could be string URL, or object with url/path
+    let url: string | null = null;
+
+    if (typeof item === "string") {
+      url = item;
+    } else if (typeof item === "object" && item !== null) {
+      const obj = item as Record<string, unknown>;
+      url = (obj.url || obj.path || obj.value) as string | null;
+    }
+
+    if (!url) return null;
+
+    // Make absolute URL
+    if (!url.startsWith("http")) {
+      if (url.startsWith("/")) {
+        url = `${baseUrl}${url}`;
+      } else {
+        url = `${baseUrl}/file=${url}`;
+      }
+    }
+
+    // Don't download here, return URL for client
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+async function downloadAsBase64(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms));
 }
 
 export async function POST(req: NextRequest) {
@@ -159,38 +271,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Convert base64 to Blob
-    const toBlob = (dataUrl: string): Blob => {
-      const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, "");
-      const buffer = Buffer.from(base64, "base64");
-      const mimeMatch = dataUrl.match(/^data:(image\/\w+);base64,/);
-      const mime = mimeMatch ? mimeMatch[1] : "image/png";
-      return new Blob([buffer], { type: mime });
-    };
+    // Try each space
+    for (const space of SPACES) {
+      console.log(`[TryOn] === Trying space: ${space.id} ===`);
 
-    const personBlob = toBlob(personImage);
-    const garmentBlob = toBlob(garmentImage);
+      const result = await trySpace(space, personImage, garmentImage);
 
-    // Try each Space until one works
-    for (const spaceId of TRYON_SPACES) {
-      console.log(`Trying Virtual Try-On space: ${spaceId}`);
-      const result = await callGradioSpace(spaceId, personBlob, garmentBlob);
       if (result) {
+        // If result is URL, download to base64
+        let finalImage = result;
+        if (result.startsWith("http")) {
+          const downloaded = await downloadAsBase64(result);
+          if (downloaded) finalImage = downloaded;
+        }
+
         return NextResponse.json({
           success: true,
-          resultImage: result,
-          model: spaceId,
+          resultImage: finalImage,
+          model: space.id,
         });
       }
     }
 
+    // All spaces failed - return helpful error
     return NextResponse.json(
-      { error: "Tất cả AI model đều đang bận. Vui lòng thử lại sau 1-2 phút." },
+      {
+        error: "Các AI model đang quá tải hoặc bảo trì. Vui lòng thử lại sau 2-3 phút.",
+        suggestion: "Bạn có thể thử tại: https://huggingface.co/spaces/Kwai-Kolors/Kolors-Virtual-Try-On"
+      },
       { status: 503 }
     );
   } catch (err) {
+    console.error("[TryOn] Fatal error:", err);
     return NextResponse.json(
-      { error: `Lỗi: ${err instanceof Error ? err.message : "Unknown"}` },
+      { error: `Lỗi server: ${err instanceof Error ? err.message : "Unknown"}` },
       { status: 500 }
     );
   }

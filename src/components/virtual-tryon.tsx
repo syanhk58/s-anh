@@ -44,6 +44,7 @@ export default function VirtualTryOn() {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
   const [history, setHistory] = useState<TryOnResult[]>(() => loadHistory());
 
@@ -132,6 +133,7 @@ export default function VirtualTryOn() {
 
     setIsProcessing(true);
     setError(null);
+    setSuggestion(null);
     setResultImage(null);
     setProgress("Đang gửi ảnh lên AI...");
 
@@ -148,6 +150,7 @@ export default function VirtualTryOn() {
 
       if (!res.ok || data.error) {
         setError(data.error || "Lỗi không xác định");
+        if (data.suggestion) setSuggestion(data.suggestion);
         return;
       }
 
@@ -181,6 +184,7 @@ export default function VirtualTryOn() {
     setGarmentImage(null);
     setResultImage(null);
     setError(null);
+    setSuggestion(null);
     setProgress("");
   };
 
@@ -319,9 +323,23 @@ export default function VirtualTryOn() {
             {error && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden mb-4">
-                <div className="rounded-xl bg-red-50 border border-red-200 p-3 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-                  <span className="text-xs text-red-600 font-medium">{error}</span>
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-xs text-red-600 font-medium">{error}</span>
+                  </div>
+                  {suggestion && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <a href={suggestion} target="_blank" rel="noopener noreferrer"
+                        className="text-[11px] px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 font-semibold hover:bg-blue-200 transition-colors">
+                        🔗 Thử trực tiếp trên HuggingFace
+                      </a>
+                      <button onClick={generateTryOn}
+                        className="text-[11px] px-3 py-1.5 rounded-lg bg-violet-100 text-violet-700 font-semibold hover:bg-violet-200 transition-colors">
+                        🔄 Thử lại
+                      </button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
