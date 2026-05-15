@@ -86,6 +86,18 @@ const TRANSITION_OPTIONS = [
 const TEXT_COLORS = ["#FFFFFF", "#000000", "#FF6B6B", "#4ECDC4", "#FFE66D", "#A8E6CF", "#FF8A5C", "#6C5CE7"];
 const BG_COLORS = ["#000000", "#FFFFFF", "#1a1a2e", "#16213e", "#0f3460", "#e94560", "#533483", "transparent"];
 
+// Fashion prompt templates for Grok Video
+const FASHION_PROMPTS = [
+  { id: "walk", label: "Đi bộ tự tin", emoji: "🚶‍♀️", prompt: "The model walks forward confidently on a fashion runway with elegant posture, gentle wind blowing hair, cinematic lighting, 4K quality" },
+  { id: "spin", label: "Xoay người khoe đồ", emoji: "💃", prompt: "The model spins around slowly 360 degrees to showcase the outfit from all angles, smooth cinematic rotation, studio lighting" },
+  { id: "pose", label: "Tạo dáng thời trang", emoji: "📸", prompt: "The model strikes multiple fashion poses naturally, subtle movements, professional photo shoot style, beautiful bokeh background" },
+  { id: "street", label: "Street style", emoji: "🌆", prompt: "The model walks casually on a beautiful city street, natural movement, street fashion photography style, golden hour lighting" },
+  { id: "wind", label: "Tóc bay trong gió", emoji: "💨", prompt: "Gentle wind blows through the model's hair and clothes, creating elegant flowing movement, cinematic slow motion effect" },
+  { id: "catwalk", label: "Catwalk sàn diễn", emoji: "👠", prompt: "The model walks confidently on a professional fashion catwalk, spotlights, audience blur in background, high fashion runway" },
+  { id: "lookbook", label: "Lookbook chụp hình", emoji: "📖", prompt: "The model poses naturally for a lookbook photoshoot, switching between 3 elegant poses, soft studio lighting" },
+  { id: "outdoor", label: "Ngoài trời tự nhiên", emoji: "🌿", prompt: "The model walks naturally in a beautiful outdoor setting, trees and flowers in background, natural sunlight, lifestyle fashion" },
+];
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function VideoCreator() {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
@@ -103,8 +115,11 @@ export default function VideoCreator() {
 
   const [activePreviewIdx, setActivePreviewIdx] = useState(0);
   const [dragOverMedia, setDragOverMedia] = useState(false);
+  const [grokPrompt, setGrokPrompt] = useState(FASHION_PROMPTS[0].prompt);
+  const [customMusicFile, setCustomMusicFile] = useState<{ name: string; dataUrl: string } | null>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const musicInputRef = useRef<HTMLInputElement>(null);
 
   // Load from localStorage
   useEffect(() => {
@@ -217,6 +232,8 @@ export default function VideoCreator() {
           settings,
           hfToken: settings.mode === "ai" ? hfToken : null,
           xaiToken: settings.mode === "grok" ? xaiToken : null,
+          grokPrompt: settings.mode === "grok" ? grokPrompt : undefined,
+          customMusic: customMusicFile?.dataUrl || null,
         }),
         signal: controller.signal,
       });
@@ -340,6 +357,47 @@ export default function VideoCreator() {
               <p className="text-[10px] text-slate-400">Stable Video Diffusion. Cần HF token. (~60-120s/clip).</p>
             </button>
           </div>
+
+          {/* ═══ GROK PROMPT + FASHION TEMPLATES ═══ */}
+          <AnimatePresence>
+            {settings.mode === "grok" && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden">
+                <div className="mt-3 p-4 rounded-xl bg-sky-50 border border-sky-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-3.5 h-3.5 text-sky-500" />
+                    <span className="text-xs font-bold text-sky-700">Prompt điều khiển chuyển động</span>
+                  </div>
+
+                  {/* Fashion prompt templates */}
+                  <div className="grid grid-cols-4 gap-1.5 mb-3">
+                    {FASHION_PROMPTS.map(fp => (
+                      <button key={fp.id} onClick={() => setGrokPrompt(fp.prompt)}
+                        className={cn(
+                          "p-2 rounded-lg border text-center transition-all text-[10px]",
+                          grokPrompt === fp.prompt
+                            ? "border-sky-400 bg-sky-100 text-sky-700 font-bold shadow-sm"
+                            : "border-slate-200 hover:border-sky-300 text-slate-500"
+                        )}>
+                        <div className="text-base mb-0.5">{fp.emoji}</div>
+                        {fp.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Custom prompt input */}
+                  <textarea
+                    value={grokPrompt}
+                    onChange={e => setGrokPrompt(e.target.value)}
+                    placeholder="Mô tả cách model chuyển động..."
+                    rows={2}
+                    className="w-full rounded-lg border border-sky-200 bg-white px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-sky-400/30 resize-none"
+                  />
+                  <p className="text-[9px] text-sky-400 mt-1">Chọn template ở trên hoặc tự nhập prompt bằng tiếng Anh</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* xAI / Grok Token Input */}
           <AnimatePresence>
@@ -594,6 +652,38 @@ export default function VideoCreator() {
                     </button>
                   ))}
                 </div>
+                {/* Custom music upload */}
+                <input ref={musicInputRef} type="file" accept="audio/*" className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setCustomMusicFile({ name: file.name, dataUrl: ev.target?.result as string });
+                      setSettings(s => ({ ...s, bgMusic: "custom" }));
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.value = "";
+                  }} />
+                <button onClick={() => musicInputRef.current?.click()}
+                  className={cn("mt-2 w-full p-2.5 rounded-xl border-2 border-dashed text-center transition-all",
+                    customMusicFile ? "border-amber-400 bg-amber-50" : "border-slate-200 hover:border-amber-300")}>
+                  {customMusicFile ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-sm">🎵</span>
+                      <span className="text-[10px] font-bold text-amber-700 truncate max-w-[150px]">{customMusicFile.name}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setCustomMusicFile(null); setSettings(s => ({ ...s, bgMusic: "none" })); }}
+                        className="text-red-400 hover:text-red-600">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="text-sm">📁</div>
+                      <div className="text-[10px] font-bold text-slate-400 mt-0.5">Upload nhạc riêng (MP3/M4A)</div>
+                    </div>
+                  )}
+                </button>
               </div>
             </div>
           </div>

@@ -386,11 +386,32 @@ function concatenateClips(
 function addBackgroundMusic(
   videoPath: string,
   outputPath: string,
-  musicType: string
+  musicType: string,
+  customMusicData?: string,
+  sessionDir?: string
 ): void {
+  // Custom music from user upload
+  if (musicType === "custom" && customMusicData && sessionDir) {
+    try {
+      const audioData = customMusicData.replace(/^data:audio\/\w+;base64,/, "");
+      const audioPath = path.join(sessionDir, "custom-music.mp3");
+      writeFileSync(audioPath, Buffer.from(audioData, "base64"));
+
+      execSync(
+        `"${FFMPEG}" -y -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest "${outputPath}" 2>/dev/null`,
+        { stdio: "pipe", timeout: 60000 }
+      );
+      return;
+    } catch {
+      // Fallback: copy without music
+      execSync(`cp "${videoPath}" "${outputPath}"`, { stdio: "pipe" });
+      return;
+    }
+  }
+
   // For now, just copy the video without music
   // TODO: Add preset music files
-  if (musicType === "none" || musicType === "custom") {
+  if (musicType === "none") {
     execSync(`cp "${videoPath}" "${outputPath}"`, { stdio: "pipe" });
     return;
   }
@@ -417,7 +438,9 @@ export async function generateVideo(
   settings: VideoGenSettings,
   hfToken: string | null,
   onProgress: ProgressCallback,
-  xaiApiKey?: string | null
+  xaiApiKey?: string | null,
+  grokPrompt?: string,
+  customMusicData?: string
 ): Promise<string | null> {
   // Validate
   if (!checkFFmpeg()) {
@@ -475,7 +498,7 @@ export async function generateVideo(
           total: totalSteps,
         });
 
-        const grokSuccess = await animateImageWithGrok(resizedPath, clipPath, xaiApiKey!, settings.slideDuration);
+        const grokSuccess = await animateImageWithGrok(resizedPath, clipPath, xaiApiKey!, settings.slideDuration, grokPrompt);
 
         if (!grokSuccess) {
           onProgress({
@@ -578,7 +601,7 @@ export async function generateVideo(
       onProgress({ type: "adding_music", message: "🎵 Đang thêm nhạc nền..." });
     }
 
-    addBackgroundMusic(stitchedPath, finalPath, settings.bgMusic);
+    addBackgroundMusic(stitchedPath, finalPath, settings.bgMusic, customMusicData, sessionDir);
 
     // ── Step 5: Complete ────────────────────────────────────────────────
     const downloadUrl = `/generated-videos/${finalFilename}`;

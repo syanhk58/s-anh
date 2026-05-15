@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Upload, Download, X, Loader2, Sparkles, Image,
   ChevronRight, Globe, AlertCircle, CheckCircle2,
-  RotateCcw, ArrowRight, Shirt, User, Zap
+  RotateCcw, ArrowRight, Shirt, User, Zap, Key, ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +21,7 @@ interface TryOnResult {
 
 // ─── localStorage ─────────────────────────────────────────────────────────────
 const LS_TRYON_HISTORY = "sanh_tryon_history";
+const LS_FASHN_KEY = "sanh_fashn_api_key";
 
 function loadHistory(): TryOnResult[] {
   if (typeof window === "undefined") return [];
@@ -32,9 +33,12 @@ function loadHistory(): TryOnResult[] {
 function saveHistory(items: TryOnResult[]) {
   if (typeof window === "undefined") return;
   try {
-    // Keep only last 10 to save space
     localStorage.setItem(LS_TRYON_HISTORY, JSON.stringify(items.slice(0, 10)));
   } catch { /* ignore */ }
+}
+function loadApiKey(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem(LS_FASHN_KEY) || "";
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -47,6 +51,8 @@ export default function VirtualTryOn() {
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [progress, setProgress] = useState("");
   const [history, setHistory] = useState<TryOnResult[]>(() => loadHistory());
+  const [fashnKey, setFashnKey] = useState(() => loadApiKey());
+  const [showKeyInput, setShowKeyInput] = useState(false);
 
   // ─── File Upload Handler ──────────────────────────────────────────────
   const handleUpload = useCallback((
@@ -143,7 +149,7 @@ export default function VirtualTryOn() {
       const res = await fetch("/api/tryon/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ personImage, garmentImage }),
+        body: JSON.stringify({ personImage, garmentImage, apiKey: fashnKey || undefined }),
       });
 
       const data = await res.json();
@@ -151,6 +157,8 @@ export default function VirtualTryOn() {
       if (!res.ok || data.error) {
         setError(data.error || "Lỗi không xác định");
         if (data.suggestion) setSuggestion(data.suggestion);
+        if (data.setupUrl) setSuggestion(data.setupUrl);
+        if (data.needApiKey) setShowKeyInput(true);
         return;
       }
 
@@ -220,6 +228,48 @@ export default function VirtualTryOn() {
       </div>
 
       <div className="space-y-5">
+        {/* ═══ API KEY SECTION ═══ */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+                <Key className="w-3.5 h-3.5 text-white" />
+              </div>
+              <h3 className="text-sm font-bold text-slate-700">FASHN API Key</h3>
+              {fashnKey && (
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 font-semibold">✓ Đã cấu hình</span>
+              )}
+            </div>
+            <button onClick={() => setShowKeyInput(!showKeyInput)}
+              className="text-[10px] text-slate-400 hover:text-blue-500 font-semibold">
+              {showKeyInput ? "Ẩn" : fashnKey ? "Sửa key" : "Cấu hình"}
+            </button>
+          </div>
+
+          {(showKeyInput || !fashnKey) && (
+            <div className="mt-3">
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={fashnKey}
+                  onChange={(e) => {
+                    setFashnKey(e.target.value);
+                    localStorage.setItem(LS_FASHN_KEY, e.target.value);
+                  }}
+                  placeholder="Paste FASHN API Key..."
+                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+                <a href="https://app.fashn.ai/api" target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-3 py-2 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-semibold hover:bg-amber-100 transition-colors whitespace-nowrap">
+                  <ExternalLink className="w-3 h-3" /> Lấy key (free)
+                </a>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-1.5">
+                Đăng ký tại <a href="https://app.fashn.ai" target="_blank" className="text-blue-500 underline">app.fashn.ai</a> → Settings → API → Copy key. Được 10 credits miễn phí.
+              </p>
+            </div>
+          )}
+        </div>
         {/* ═══ UPLOAD SECTION ═══ */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm p-5">
           <div className="flex items-center justify-between mb-4">

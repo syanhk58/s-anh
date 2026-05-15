@@ -12,6 +12,8 @@ export async function POST(req: NextRequest) {
     settings,     // VideoGenSettings
     hfToken,      // string | null
     xaiToken,     // string | null — xAI Grok Imagine Video
+    grokPrompt,   // string | null — custom prompt for Grok animation
+    customMusic,  // string | null — base64 audio for custom music
   } = body;
 
   // Create a ReadableStream for SSE
@@ -36,7 +38,9 @@ export async function POST(req: NextRequest) {
           (event) => {
             sendEvent({ ...event });
           },
-          xaiToken || process.env.XAI_API_KEY || null
+          xaiToken || process.env.XAI_API_KEY || null,
+          grokPrompt || undefined,
+          customMusic || undefined
         );
       } catch (err) {
         sendEvent({
