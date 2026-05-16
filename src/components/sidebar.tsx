@@ -1,9 +1,9 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Search, FileText, Home, Wrench, Megaphone, Video, Eraser, Shirt } from "lucide-react";
+import { Search, FileText, Home, Wrench, Megaphone, Video, Eraser, Shirt, Clapperboard } from "lucide-react";
 
-export type ModuleId = "tim-sp-spy" | "tao-kich-ban" | "dang-bai-page" | "tool-page" | "tao-video" | "xoa-logo" | "thu-do-ai";
+export type ModuleId = "tim-sp-spy" | "tao-kich-ban" | "dang-bai-page" | "tool-page" | "tao-video" | "xoa-logo" | "thu-do-ai" | "video-thoi-trang";
 
 export interface NavItem {
   id: ModuleId;
@@ -16,9 +16,10 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "tao-kich-ban",  label: "Tạo kịch bản",    icon: FileText },
   { id: "dang-bai-page", label: "Đăng bài Page",   icon: Megaphone },
   { id: "tool-page",     label: "Tool Page",        icon: Wrench },
-  { id: "thu-do-ai",     label: "Thử Đồ AI",        icon: Shirt },
-  { id: "tao-video",     label: "Tạo Video",        icon: Video },
-  { id: "xoa-logo",      label: "Xóa Logo Video",   icon: Eraser },
+  { id: "thu-do-ai",         label: "Thử Đồ AI",          icon: Shirt },
+  { id: "video-thoi-trang",  label: "Video Thời Trang",   icon: Clapperboard },
+  { id: "tao-video",         label: "Tạo Video",          icon: Video },
+  { id: "xoa-logo",          label: "Xóa Logo Video",     icon: Eraser },
 ];
 
 interface SidebarProps {

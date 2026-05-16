@@ -9,6 +9,7 @@ import PagePostTool from "@/components/page-post-tool";
 import VideoCreator from "@/components/video-creator";
 import VideoRemixer from "@/components/video-remixer";
 import VirtualTryOn from "@/components/virtual-tryon";
+import FashionVideo from "@/components/fashion-video";
 
 function ModuleContent({ moduleId }: { moduleId: ModuleId }) {
   switch (moduleId) {
@@ -19,6 +20,7 @@ function ModuleContent({ moduleId }: { moduleId: ModuleId }) {
     case "tao-video":      return <VideoCreator />;
     case "xoa-logo":       return <VideoRemixer />;
     case "thu-do-ai":      return <VirtualTryOn />;
+    case "video-thoi-trang": return <FashionVideo />;
     default:               return null;
   }
 }
